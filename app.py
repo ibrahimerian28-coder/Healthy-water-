@@ -3,20 +3,21 @@ import pandas as pd
 import requests
 from io import StringIO
 from datetime import datetime
+import random # لاستخدامه في تحديث البيانات الإجباري
 
 # --- 1. الإعدادات ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide")
 
 SHEET_ID = "1f3wgOq_s0Aies7JasDzKFz8R38U39hTa5IUoJTZYL30"
-# رابط القراءة من التبويب اللي جوجل عملته (Form Responses 1)
-CLIENTS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Form%20Responses%201"
-# رابط الإرسال للفورم
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeQa4UJW8n9-8lCipPgrUGBbTSmfxNizON86zDfWgw6pmOmYw/formResponse"
 
-# --- 2. وظيفة تحميل البيانات ---
+# --- 2. وظيفة تحميل البيانات المحدثة (إجبار التحديث) ---
 def load_data():
+    # إضافة رقم عشوائي للرابط لمنع المتصفح من عرض نسخة قديمة (Cache)
+    cache_buster = random.randint(1, 100000)
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Form%20Responses%201&cache={cache_buster}"
     try:
-        res = requests.get(CLIENTS_URL, timeout=10)
+        res = requests.get(url, timeout=10)
         if res.status_code == 200:
             df = pd.read_csv(StringIO(res.text))
             return df
@@ -24,6 +25,7 @@ def load_data():
     except:
         return pd.DataFrame()
 
+# تحميل البيانات
 df_c = load_data()
 
 # --- 3. نظام الدخول ---
@@ -54,7 +56,7 @@ if menu == "تسجيل عميل جديد":
         if st.form_submit_button("✅ حفظ"):
             if name and phones:
                 try:
-                    # ميكانيكا الـ ID
+                    # ميكانيكا الـ ID الآمنة
                     new_id = 101 if df_c.empty else int(df_c.iloc[:, 1].max()) + 1
                 except:
                     new_id = 101
@@ -73,41 +75,36 @@ if menu == "تسجيل عميل جديد":
                 headers = {'Referer': FORM_URL, 'User-Agent': "Mozilla/5.0"}
                 try:
                     requests.post(FORM_URL, data=form_data, headers=headers)
-                    st.success(f"تم تسجيل {name} بنجاح! انتظر ثواني وستظهر في القائمة.")
-                    st.balloons()
+                    st.success(f"تم الإرسال بنجاح! جاري تحديث القائمة...")
+                    # مسح الكاش وإعادة التحميل فوراً
+                    st.rerun()
                 except:
-                    st.error("خطأ في الاتصال بجوجل")
-            else:
-                st.warning("برجاء ملء الاسم والرقم")
+                    st.error("خطأ في الاتصال")
 
-# --- 6. عرض البيانات (الكود الآمن) ---
+# --- 6. عرض البيانات ---
 elif menu == "بيانات العملاء":
     st.header("👥 قائمة العملاء")
     
-    if df_c.empty or len(df_c.columns) < 4:
-        st.info("لا توجد بيانات حالياً. يرجى تسجيل أول عميل.")
+    # زر يدوي لتحديث البيانات لو معلقت
+    if st.button("🔄 تحديث يدوي للبيانات"):
+        st.rerun()
+
+    if df_c.empty or len(df_c.columns) < 3:
+        st.info("لا توجد بيانات حالياً. تأكد من وجود بيانات في صفحة 'Form Responses 1' في الشيت.")
     else:
         search = st.text_input("🔍 بحث بالاسم")
-        
-        # طريقة آمنة للوصول للأعمدة بالترتيب وليس بالاسم
-        # العمود 0: الوقت | العمود 1: ID | العمود 2: الاسم | العمود 3: الهاتف
         f_df = df_c.copy()
         
+        # العمود 2 هو الاسم والعمود 3 هو الهاتف (بناءً على نظام جوجل فورم)
         try:
-            name_col_idx = 2
-            phone_col_idx = 3
-            
             if search:
-                f_df = f_df[f_df.iloc[:, name_col_idx].astype(str).str.contains(search, na=False)]
+                f_df = f_df[f_df.iloc[:, 2].astype(str).str.contains(search, na=False)]
 
             for i, row in f_df.iterrows():
-                client_name = row.iloc[name_col_idx]
-                client_phone = row.iloc[phone_col_idx]
-                
-                with st.expander(f"👤 {client_name}"):
-                    st.write(f"📞 هاتف: {client_phone}")
-                    st.write(f"📍 المنطقة: {row.iloc[5] if len(row) > 5 else 'غير محدد'}")
-                    st.link_button("📲 اتصال", f"tel:{client_phone}")
-                    st.link_button("💬 واتساب", f"https://wa.me/2{client_phone}")
-        except Exception as e:
-            st.warning("هناك مشكلة في ترتيب أعمدة الشيت، تأكد من تسجيل عميل واحد على الأقل عبر التطبيق.")
+                with st.expander(f"👤 {row.iloc[2]}"):
+                    st.write(f"📞 هاتف: {row.iloc[3]}")
+                    st.write(f"📍 المنطقة: {row.iloc[5] if len(row)>5 else 'غير محدد'}")
+                    st.link_button("📲 اتصال", f"tel:{row.iloc[3]}")
+        except:
+            st.warning("البيانات موجودة في الشيت ولكن بترتيب مختلف.")
+            st.dataframe(df_c) # عرض الجدول كما هو لو حصلت مشكلة في الكروت
