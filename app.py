@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime, timedelta
-import plotly.express as px # للمخططات البيانية
 
 # --- 1. الإعدادات ---
 st.set_page_config(page_title="Healthy Water", layout="wide")
@@ -18,17 +17,14 @@ def load_db(file, cols):
 def save_db(df, file): df.to_csv(file, index=False)
 
 C_COLS = ['id', 'اسم العميل', 'الهواتف', 'العنوان', 'المنطقه', 'الموقع', 'دورة الصيانة', 'تاريخ الزيارة القادمة', 'تاريخ آخر زيارة']
-H_COLS = ['id_عميل', 'اسم العميل', 'تاريخ الزيارة', 'p1', 'p2', 'p3', 'ممبرين', 'بوست كاربون', 'كالسيت', 'انفر ريد', 'اخري', 'المبلغ', 'تكلفة البضاعة']
 S_COLS = ['العنصر', 'الكميه', 'سعر الوحده', 'القيمه الاجماليه']
-EXP_COLS = ['التاريخ', 'انتقالات', 'عمولات', 'نثريات', 'بيان']
 
 df_c = load_db("customers_final.csv", C_COLS)
-df_h = load_db("history_final.csv", H_COLS)
 df_s = load_db("stock_final.csv", S_COLS)
-df_e = load_db("expenses_final.csv", EXP_COLS)
 
-# --- 3. نظام الدخول (كما هو) ---
+# --- 3. نظام الدخول ---
 if 'role' not in st.session_state: st.session_state.role = None
+
 if st.session_state.role is None:
     st.image(LOGO_URL, width=150)
     st.title("💧 Healthy Water")
@@ -37,67 +33,83 @@ if st.session_state.role is None:
         if pwd == "HgM18082019$&)":
             st.session_state.role = "admin"
             st.rerun()
+        else: st.error("خطأ!")
     st.stop()
 
 # --- 4. القائمة الجانبية ---
-menu = st.sidebar.radio("القائمة الرئيسية", ["بيانات العملاء", "تسجيل عميل جديد", "سجل الصيانات", "المخزن", "الحسابات والمصروفات", "الأرباح والتقارير"])
+st.sidebar.image(LOGO_URL, width=80)
+menu = st.sidebar.radio("القائمة الرئيسية", ["بيانات العملاء", "تسجيل عميل جديد", "سجل الصيانات", "المخزن", "الحسابات والمصروفات"])
 
-# --- إصلاح دالة تلوين الجدول ---
-def color_date(val):
-    try:
-        diff = (pd.to_datetime(val).date() - datetime.now().date()).days
-        if diff < 0: return 'background-color: #ffcccc'
-        if diff <= 7: return 'background-color: #ffffcc'
-        return 'background-color: #ccffcc'
-    except: return ''
+# --- 5. صفحة تسجيل عميل جديد (تم الإصلاح) ---
+if menu == "تسجيل عميل جديد":
+    st.header("📝 تسجيل عميل جديد")
+    with st.form("add_customer_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        name = col1.text_input("👤 اسم العميل")
+        phones = col2.text_input("📞 الهواتف (فاصلة بين الأرقام)")
+        
+        addr = st.text_area("🏠 العنوان")
+        
+        col3, col4 = st.columns(2)
+        area = col3.text_input("📍 المنطقة")
+        loc = col4.text_input("🔗 رابط اللوكيشن")
+        
+        col5, col6 = st.columns(2)
+        cycle = col5.number_input("📅 دورة الصيانة (شهور)", min_value=1, value=3)
+        last_v = col6.date_input("🗓️ تاريخ آخر زيارة", value=datetime.now().date())
+        
+        if st.form_submit_button("✅ حفظ العميل"):
+            if name and phones:
+                # ميكانيكا الـ ID يبدأ من 101
+                new_id = 101 if df_c.empty else int(df_c['id'].max()) + 1
+                next_v = last_v + timedelta(days=int(cycle) * 30)
+                
+                new_row = {
+                    'id': new_id, 'اسم العميل': name, 'الهواتف': phones, 
+                    'العنوان': addr, 'المنطقه': area, 'الموقع': loc, 
+                    'دورة الصيانة': cycle, 'تاريخ الزيارة القادمة': next_v, 
+                    'تاريخ آخر زيارة': last_v
+                }
+                
+                df_c = pd.concat([df_c, pd.DataFrame([new_row])], ignore_index=True)
+                save_db(df_c, "customers_final.csv")
+                st.success(f"تم تسجيل العميل بنجاح بكود: {new_id}")
+                st.balloons()
+            else:
+                st.error("يرجى ملء الاسم ورقم الهاتف")
 
-if menu == "بيانات العملاء":
-    st.header("👥 قاعدة البيانات")
-    search = st.text_input("🔎 بحث سريع")
+# --- 6. صفحة بيانات العملاء ---
+elif menu == "بيانات العملاء":
+    st.header("👥 قاعدة بيانات العملاء")
+    search = st.text_input("🔎 بحث بالاسم أو الرقم")
+    
     f_df = df_c.copy()
     if search:
         f_df = f_df[f_df['اسم العميل'].str.contains(search, na=False) | f_df['الهواتف'].str.contains(search, na=False)]
     
-    # استخدام .map بدلاً من .applymap لحل المشكلة
+    def color_date(val):
+        try:
+            diff = (pd.to_datetime(val).date() - datetime.now().date()).days
+            if diff < 0: return 'background-color: #ffcccc'
+            if diff <= 7: return 'background-color: #ffffcc'
+            return 'background-color: #ccffcc'
+        except: return ''
+
     st.dataframe(f_df.style.map(color_date, subset=['تاريخ الزيارة القادمة']), use_container_width=True)
 
-elif menu == "الحسابات والمصروفات":
-    st.header("💰 المصروفات اليومية")
-    with st.form("exp_form"):
-        col1, col2, col3 = st.columns(3)
-        trans = col1.number_input("🚗 انتقالات", min_value=0)
-        comm = col2.number_input("💸 عمولات", min_value=0)
-        misc = col3.number_input("☕ نثريات", min_value=0)
-        note = st.text_input("📝 بيان المصرف")
-        if st.form_submit_button("حفظ المصروف"):
-            new_e = {'التاريخ': datetime.now().date(), 'انتقالات': trans, 'عمولات': comm, 'نثريات': misc, 'بيان': note}
-            df_e = pd.concat([df_e, pd.DataFrame([new_e])], ignore_index=True)
-            save_db(df_e, "expenses_final.csv")
-            st.success("تم تسجيل المصروف")
-
-    st.subheader("سجل المصروفات")
-    st.table(df_e.tail(10))
-
-elif menu == "الأرباح والتقارير":
-    st.header("📈 تقارير الأرباح")
+# --- 7. صفحة المخزن ---
+elif menu == "المخزن":
+    st.header("📦 إدارة المخزن")
+    if df_s.empty:
+        items = ['p1', 'p2', 'p3', 'ممبرين', 'بوست كاربون', 'كالسيت', 'انفر ريد']
+        df_s = pd.DataFrame({'العنصر': items, 'الكميه': [0]*7, 'سعر الوحده': [0.0]*7, 'القيمه الاجماليه': [0.0]*7})
     
-    total_revenue = pd.to_numeric(df_h['المبلغ']).sum()
-    total_cost = pd.to_numeric(df_h['تكلفة البضاعة']).sum()
-    total_expenses = df_e[['انتقالات', 'عمولات', 'نثريات']].sum().sum()
-    
-    net_profit = total_revenue - (total_cost + total_expenses)
-    
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("إجمالي التحصيل", f"{total_revenue:,}")
-    c2.metric("تكلفة البضاعة", f"{total_cost:,}")
-    c3.metric("المصروفات", f"{total_expenses:,}")
-    c4.metric("صافي الربح", f"{net_profit:,}", delta_color="normal")
+    edited_df = st.data_editor(df_s, num_rows="dynamic", use_container_width=True)
+    if st.button("💾 حفظ التعديلات"):
+        edited_df['القيمه الاجماليه'] = edited_df['الكميه'] * edited_df['سعر الوحده']
+        save_db(edited_df, "stock_final.csv")
+        st.success("تم التحديث")
 
-    # رسم بياني بسيط للتوضيح
-    if not df_h.empty:
-        df_h['تاريخ الزيارة'] = pd.to_datetime(df_h['تاريخ الزيارة'])
-        daily_rev = df_h.groupby(df_h['تاريخ الزيارة'].dt.date)['المبلغ'].sum().reset_index()
-        fig = px.line(daily_rev, x='تاريخ الزيارة', y='المبلغ', title="تطور التحصيل اليومي")
-        st.plotly_app(fig)
-
-# (بقية الأكواد السابقة تسجيل العميل والمخزن تظل كما هي مع إضافة تكلفة البضاعة عند الحفظ)
+if st.sidebar.button("تسجيل الخروج"):
+    st.session_state.role = None
+    st.rerun()
