@@ -1,25 +1,38 @@
 import streamlit as st
 import pandas as pd
 import requests
+from io import StringIO
 from datetime import datetime, timedelta
 
 # --- 1. الإعدادات ---
-st.set_page_config(page_title="Healthy Water Database", layout="wide")
+st.set_page_config(page_title="Healthy Water Pro", layout="wide")
 
-# الرابط اللي هتاخده من موقع SheetDB
-API_URL = "https://sheetdb.io/api/v1/25ojnsldblcqy"
+# الرابط الخاص بالشيت بتاعك
+SHEET_ID = "1f3wgOq_s0Aies7JasDzKFz8R38U39hTa5IUoJTZYL30"
+
+# --- تعديل أسماء الصفحات بناءً على الصور الجديدة ---
+# صفحة العملاء أصبحت الآن Form Responses 1 لأن الفورم بعت عليها
+CLIENTS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Form%20Responses%201"
+# صفحة التاريخ لسه زي ما هي History
+HISTORY_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=History"
+
+# رابط إرسال الفورم (اللي استخدمناه المرة اللي فاتت)
+FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeQa4UJW8n9-8lCipPgrUGBbTSmfxNizON86zDfWgw6pmOmYw/formResponse"
 
 # --- 2. وظيفة تحميل البيانات ---
-def load_data():
+def load_data(url):
     try:
-        response = requests.get(API_URL)
-        if response.status_code == 200:
-            return pd.DataFrame(response.json())
+        res = requests.get(url)
+        if res.status_code == 200:
+            df = pd.read_csv(StringIO(res.text))
+            # تنظيف البيانات من أي أعمدة فارغة تماماً
+            return df.dropna(how='all', axis=1).dropna(how='all', axis=0)
         return pd.DataFrame()
     except:
         return pd.DataFrame()
 
-df_c = load_data()
+df_c = load_data(CLIENTS_URL)
+df_h = load_data(HISTORY_URL)
 
 # --- 3. نظام الدخول ---
 if 'role' not in st.session_state: st.session_state.role = None
@@ -32,57 +45,63 @@ if st.session_state.role is None:
             st.rerun()
     st.stop()
 
-# --- 4. القائمة ---
+# --- 4. القائمة الجانبية ---
 menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "تسجيل عميل جديد"])
 
-# --- 5. تسجيل عميل جديد (حفظ حقيقي ومباشر) ---
+# --- 5. تسجيل عميل جديد ---
 if menu == "تسجيل عميل جديد":
     st.header("📝 إضافة عميل جديد")
-    with st.form("add_form", clear_on_submit=True):
+    with st.form("add_client_form", clear_on_submit=True):
         name = st.text_input("اسم العميل")
         phones = st.text_input("الأرقام")
         addr = st.text_input("العنوان")
         area = st.text_input("المنطقة")
+        loc = st.text_input("رابط اللوكيشن")
         cycle = st.number_input("دورة الصيانة (شهور)", value=3)
         
-        if st.form_submit_button("✅ حفظ في الإكسيل"):
+        if st.form_submit_button("✅ حفظ"):
             if name and phones:
-                # حساب الـ ID
-                new_id = 101 if df_c.empty else int(df_c.iloc[:,0].astype(int).max()) + 1
+                # ميكانيكا الـ ID
+                new_id = 101 if df_c.empty else int(df_c.iloc[:, 1].max()) + 1
                 
-                # تجهيز البيانات (لازم الأسماء تطابق أول صف في الشيت)
-                new_data = {
-                    "data": [{
-                        "id": new_id,
-                        "اسم العميل": name,
-                        "الهواتف": phones,
-                        "العنوان": addr,
-                        "المنطقه": area,
-                        "دورة الصيانة": cycle,
-                        "تاريخ الزيارة القادمة": str(datetime.now().date()),
-                        "تاريخ آخر زيارة": "لم تتم"
-                    }]
+                form_data = {
+                    "entry.1872338545": new_id,
+                    "entry.1466263036": name,
+                    "entry.334977578": phones,
+                    "entry.1604703615": addr,
+                    "entry.51378520": area,
+                    "entry.1332478222": loc,
+                    "entry.1671668465": cycle,
+                    "entry.416270816": str(datetime.now().date()),
+                    "entry.1371491317": "لم تتم"
                 }
+                headers = {'Referer': FORM_URL, 'User-Agent': "Mozilla/5.0"}
                 
-                # الإرسال لـ SheetDB
-                res = requests.post(API_URL, json=new_data)
-                if res.status_code == 201:
-                    st.success(f"مبروك يا هندسة! العميل {name} اتسجل في الشيت")
+                try:
+                    requests.post(FORM_URL, data=form_data, headers=headers)
+                    st.success(f"تم إرسال العميل {name} لصفحة Form Responses 1 بنجاح!")
                     st.balloons()
-                else:
-                    st.error("فشل الحفظ، تأكد من رابط API")
-            else:
-                st.warning("دخل الاسم والرقم")
+                except:
+                    st.error("فشل في الإرسال")
 
-# --- 6. عرض البيانات ---
+# --- 6. عرض بيانات العملاء من التبويب الجديد ---
 elif menu == "بيانات العملاء":
-    st.header("👥 العملاء في الشيت")
+    st.header("👥 العملاء في التبويب الجديد")
     if df_c.empty:
-        st.info("الشيت فاضي أو الرابط مش مظبوط")
+        st.info("لا توجد بيانات في Form Responses 1")
     else:
-        # عرض البيانات بشكل منظم
-        for i, row in df_c.iterrows():
-            with st.expander(f"👤 {row['اسم العميل']}"):
-                st.write(f"📞 هاتف: {row['الهواتف']}")
-                st.write(f"🏠 العنوان: {row['العنوان']}")
-                st.link_button("اتصال", f"tel:{row['الهواتف']}")
+        search = st.text_input("🔍 بحث بالاسم")
+        f_df = df_c.copy()
+        
+        # ملاحظة: في شيت الفورم، أول عمود بيكون Timestamp، فالاسم بيكون في العمود التاني
+        name_col = f_df.columns[2] # عمود اسم العميل
+        phone_col = f_df.columns[3] # عمود الهواتف
+        
+        if search:
+            f_df = f_df[f_df[name_col].astype(str).str.contains(search, na=False)]
+
+        for i, row in f_df.iterrows():
+            with st.expander(f"👤 {row[name_col]}"):
+                st.write(f"📞 هاتف: {row[phone_col]}")
+                st.write(f"🏠 العنوان: {row[f_df.columns[4]]}")
+                st.link_button("اتصال", f"tel:{row[phone_col]}")
