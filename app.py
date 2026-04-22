@@ -6,61 +6,51 @@ import time
 
 # --- 1. الإعدادات ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide")
+
+# الرابط بتاعك
 API_URL = "https://api.steinhq.com/v1/storages/69e90c9f3807a370b05f5982"
 
-# --- 2. وظيفة جلب البيانات (بدون تحديد صفحة لضمان الرد) ---
+# --- 2. وظيفة جلب البيانات ---
 def load_data():
     try:
-        # بنكلم الرابط الأساسي وهو بيدينا أول داتا يلاقيها
-        res = requests.get(API_URL, timeout=15)
+        # لازم نحدد اسم التبويب "Customers" هنا عشان ميطلعش Error
+        res = requests.get(f"{API_URL}/Customers", timeout=15)
         if res.status_code == 200:
-            data = res.json()
-            # لو الرد عبارة عن قائمة صفحات، بنحاول نجيب صفحة Customers
-            if isinstance(data, dict):
-                res = requests.get(f"{API_URL}/Customers")
-                data = res.json()
-            return pd.DataFrame(data)
+            return pd.DataFrame(res.json())
+        return pd.DataFrame()
     except:
-        pass
-    return pd.DataFrame()
+        return pd.DataFrame()
 
 df_c = load_data()
 
-# --- 3. الدخول ---
-if 'role' not in st.session_state: st.session_state.role = None
-if st.session_state.role is None:
-    st.title("💧 Healthy Water")
-    pwd = st.text_input("كلمة المرور", type="password")
-    if st.button("دخول"):
-        if pwd == "HgM18082019$&)":
-            st.session_state.role = "admin"
-            st.rerun()
-    st.stop()
+# --- 3. تسجيل عميل جديد ---
+if 'role' not in st.session_state: st.session_state.role = "admin" # دخول مباشر للتجربة
 
-# --- 4. القائمة ---
 menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "تسجيل عميل جديد"])
 
-# --- 5. تسجيل عميل جديد (بدون تحديد Range) ---
 if menu == "تسجيل عميل جديد":
     st.header("📝 إضافة عميل جديد")
-    with st.form("ultra_final"):
+    with st.form("retry_form"):
         name = st.text_input("الاسم")
         phone = st.text_input("الهاتف")
         if st.form_submit_button("✅ حفظ"):
             if name and phone:
-                payload = [{"اسم العميل": name, "الأرقام": phone, "التاريخ": str(datetime.now())}]
-                # بنبعت للرابط المباشر بدون تحديد /Customers عشان نتفادى خطأ 1:1
-                resp = requests.post(API_URL, json=payload)
-                if resp.status_code == 200:
-                    st.success("تم! شيك على القائمة")
-                    st.rerun()
-                else:
-                    st.error(f"الرد من السيرفر: {resp.text}")
+                # payload بسيط جداً
+                payload = [{"اسم العميل": name, "الأرقام": phone}]
+                try:
+                    # ركز في السطر ده: ضفنا /Customers للرابط
+                    resp = requests.post(f"{API_URL}/Customers", json=payload, timeout=20)
+                    if resp.status_code == 200:
+                        st.success("البيانات وصلت للشيت أخييراً!")
+                        st.balloons()
+                    else:
+                        st.error(f"السيرفر لسه معصلج: {resp.text}")
+                except Exception as e:
+                    st.error(f"عطل فني: {str(e)}")
 
-# --- 6. العرض ---
 elif menu == "بيانات العملاء":
     st.header("👥 القائمة")
     if df_c.empty:
-        st.info("الشيت فاضي أو Stein مش شايف العناوين.")
+        st.info("مفيش بيانات.. تأكد إن صفحة Customers هي أول صفحة في الإكسيل.")
     else:
-        st.dataframe(df_c) # عرض الجدول كما هو للتأكد
+        st.write(df_c)
