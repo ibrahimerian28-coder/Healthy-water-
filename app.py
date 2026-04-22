@@ -7,32 +7,23 @@ from datetime import datetime, timedelta
 # --- 1. الإعدادات ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide")
 
-# الرابط الخاص بالشيت بتاعك
 SHEET_ID = "1f3wgOq_s0Aies7JasDzKFz8R38U39hTa5IUoJTZYL30"
-
-# --- تعديل أسماء الصفحات بناءً على الصور الجديدة ---
-# صفحة العملاء أصبحت الآن Form Responses 1 لأن الفورم بعت عليها
+# الرابط للقراءة من صفحة الفورم الجديدة
 CLIENTS_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Form%20Responses%201"
-# صفحة التاريخ لسه زي ما هي History
-HISTORY_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=History"
-
-# رابط إرسال الفورم (اللي استخدمناه المرة اللي فاتت)
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeQa4UJW8n9-8lCipPgrUGBbTSmfxNizON86zDfWgw6pmOmYw/formResponse"
 
-# --- 2. وظيفة تحميل البيانات ---
+# --- 2. وظيفة تحميل البيانات المحدثة ---
 def load_data(url):
     try:
         res = requests.get(url)
         if res.status_code == 200:
             df = pd.read_csv(StringIO(res.text))
-            # تنظيف البيانات من أي أعمدة فارغة تماماً
-            return df.dropna(how='all', axis=1).dropna(how='all', axis=0)
+            return df
         return pd.DataFrame()
     except:
         return pd.DataFrame()
 
 df_c = load_data(CLIENTS_URL)
-df_h = load_data(HISTORY_URL)
 
 # --- 3. نظام الدخول ---
 if 'role' not in st.session_state: st.session_state.role = None
@@ -45,13 +36,13 @@ if st.session_state.role is None:
             st.rerun()
     st.stop()
 
-# --- 4. القائمة الجانبية ---
+# --- 4. القائمة ---
 menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "تسجيل عميل جديد"])
 
 # --- 5. تسجيل عميل جديد ---
 if menu == "تسجيل عميل جديد":
     st.header("📝 إضافة عميل جديد")
-    with st.form("add_client_form", clear_on_submit=True):
+    with st.form("add_form", clear_on_submit=True):
         name = st.text_input("اسم العميل")
         phones = st.text_input("الأرقام")
         addr = st.text_input("العنوان")
@@ -61,9 +52,12 @@ if menu == "تسجيل عميل جديد":
         
         if st.form_submit_button("✅ حفظ"):
             if name and phones:
-                # ميكانيكا الـ ID
-                new_id = 101 if df_c.empty else int(df_c.iloc[:, 1].max()) + 1
-                
+                # ميكانيكا الـ ID الآمنة
+                try:
+                    new_id = 101 if df_c.empty else int(df_c.iloc[:, 1].max()) + 1
+                except:
+                    new_id = 101
+
                 form_data = {
                     "entry.1872338545": new_id,
                     "entry.1466263036": name,
@@ -76,32 +70,32 @@ if menu == "تسجيل عميل جديد":
                     "entry.1371491317": "لم تتم"
                 }
                 headers = {'Referer': FORM_URL, 'User-Agent': "Mozilla/5.0"}
-                
                 try:
                     requests.post(FORM_URL, data=form_data, headers=headers)
-                    st.success(f"تم إرسال العميل {name} لصفحة Form Responses 1 بنجاح!")
+                    st.success(f"تم إرسال العميل {name} بنجاح!")
                     st.balloons()
                 except:
-                    st.error("فشل في الإرسال")
+                    st.error("خطأ في الإرسال")
 
-# --- 6. عرض بيانات العملاء من التبويب الجديد ---
+# --- 6. عرض البيانات (حل مشكلة الـ IndexError) ---
 elif menu == "بيانات العملاء":
-    st.header("👥 العملاء في التبويب الجديد")
-    if df_c.empty:
-        st.info("لا توجد بيانات في Form Responses 1")
+    st.header("👥 قائمة العملاء")
+    if df_c.empty or len(df_c.columns) < 3:
+        st.info("لا توجد بيانات مسجلة بعد، أو الشيت لا يزال في مرحلة التهيئة.")
     else:
         search = st.text_input("🔍 بحث بالاسم")
+        
+        # البحث عن الأعمدة بالاسم بدلاً من الرقم لتجنب IndexError
+        # جوجل فورم بتسمي الأعمدة بنفس أسئلة الفورم
+        col_name = [c for c in df_c.columns if 'اسم العميل' in c][0]
+        col_phone = [c for c in df_c.columns if 'الأرقام' in c][0]
+        
         f_df = df_c.copy()
-        
-        # ملاحظة: في شيت الفورم، أول عمود بيكون Timestamp، فالاسم بيكون في العمود التاني
-        name_col = f_df.columns[2] # عمود اسم العميل
-        phone_col = f_df.columns[3] # عمود الهواتف
-        
         if search:
-            f_df = f_df[f_df[name_col].astype(str).str.contains(search, na=False)]
+            f_df = f_df[f_df[col_name].astype(str).str.contains(search, na=False)]
 
         for i, row in f_df.iterrows():
-            with st.expander(f"👤 {row[name_col]}"):
-                st.write(f"📞 هاتف: {row[phone_col]}")
-                st.write(f"🏠 العنوان: {row[f_df.columns[4]]}")
-                st.link_button("اتصال", f"tel:{row[phone_col]}")
+            with st.expander(f"👤 {row[col_name]}"):
+                st.write(f"📞 هاتف: {row[col_phone]}")
+                st.write(f"🏠 العنوان: {row.get('العنوان', 'غير مسجل')}")
+                st.link_button("اتصال", f"tel:{row[col_phone]}")
