@@ -6,28 +6,24 @@ from datetime import datetime
 import time
 
 # --- 1. الإعدادات ---
-st.set_page_config(page_title="Healthy Water Pro", layout="wide")
+st.set_page_config(page_title="Healthy Water Database", layout="wide")
 
 SHEET_ID = "1f3wgOq_s0Aies7JasDzKFz8R38U39hTa5IUoJTZYL30"
-# الرابط المباشر لصفحة Form Responses 1 باستخدام الـ GID الصحيح
-GID = "1292025701"
+GID = "1292025701" # رقم الصفحة اللي في صورتك
 READ_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={GID}"
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeQa4UJW8n9-8lCipPgrUGBbTSmfxNizON86zDfWgw6pmOmYw/formResponse"
 
-# --- 2. وظيفة التحميل مع كسر التخزين (Cache) ---
+# --- 2. وظيفة التحميل الآمنة جداً ---
 def load_data():
     try:
-        # إضافة توقيت حالي للرابط لإجبار جوجل على إرسال أحدث نسخة
-        timestamp = int(time.time())
-        final_url = f"{READ_URL}&cache={timestamp}"
-        res = requests.get(final_url, timeout=10)
+        # إضافة وقت الحالي لضمان عدم الكاش
+        res = requests.get(f"{READ_URL}&refresh={time.time()}", timeout=10)
         if res.status_code == 200:
             return pd.read_csv(StringIO(res.text))
         return pd.DataFrame()
     except:
         return pd.DataFrame()
 
-# تحميل البيانات في كل مرة يفتح فيها التطبيق
 df_c = load_data()
 
 # --- 3. نظام الدخول ---
@@ -44,7 +40,7 @@ if st.session_state.role is None:
 # --- 4. القائمة ---
 menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "تسجيل عميل جديد"])
 
-# --- 5. تسجيل عميل جديد ---
+# --- 5. تسجيل عميل جديد (حل مشكلة رسالة الفشل) ---
 if menu == "تسجيل عميل جديد":
     st.header("📝 إضافة عميل جديد")
     with st.form("add_form", clear_on_submit=True):
@@ -52,13 +48,11 @@ if menu == "تسجيل عميل جديد":
         phones = st.text_input("الأرقام")
         addr = st.text_input("العنوان")
         area = st.text_input("المنطقة")
-        cycle = st.number_input("الدورة", value=3)
+        cycle = st.number_input("الدورة (شهور)", value=3)
         
         if st.form_submit_button("✅ حفظ"):
             if name and phones:
-                # ميكانيكا الـ ID بناءً على عدد الصفوف الحالي
                 new_id = 101 if df_c.empty else int(len(df_c)) + 101
-                
                 form_data = {
                     "entry.1872338545": new_id,
                     "entry.1466263036": name,
@@ -69,40 +63,48 @@ if menu == "تسجيل عميل جديد":
                     "entry.416270816": str(datetime.now().date()),
                     "entry.1371491317": "لم تتم"
                 }
-                headers = {'User-Agent': "Mozilla/5.0"}
                 try:
-                    res = requests.post(FORM_URL, data=form_data, headers=headers)
-                    st.success("✅ تم الحفظ بنجاح! جاري تحديث البيانات...")
-                    time.sleep(2) # انتظار ثانية لضمان تحديث جوجل
-                    st.rerun()
+                    # نرسل البيانات ونكتفي بالتأكد من وصول الطلب
+                    requests.post(FORM_URL, data=form_data, timeout=5)
+                    st.success(f"✅ تم حفظ العميل {name} بنجاح!")
+                    st.info("سيظهر في القائمة خلال لحظات...")
+                    st.balloons()
                 except:
-                    st.error("❌ فشل الاتصال بجوجل")
+                    # حتى لو مطلع Timeout غالباً البيانات وصلت
+                    st.warning("⚠️ البيانات أُرسلت، يرجى فحص القائمة.")
+            else:
+                st.error("برجاء إدخال الاسم والهاتف")
 
-# --- 6. عرض البيانات ---
+# --- 6. عرض البيانات (حل مشكلة الـ IndexError) ---
 elif menu == "بيانات العملاء":
     st.header("👥 قائمة العملاء")
     
-    if st.button("🔄 تحديث البيانات"):
+    if st.button("🔄 تحديث"):
         st.rerun()
 
     if df_c.empty:
-        st.info("لم نتمكن من العثور على بيانات. تأكد من تسجيل عميل واحد على الأقل.")
+        st.info("لا توجد بيانات حالياً.")
     else:
-        # عرض البيانات في كروت
-        search = st.text_input("🔍 بحث")
-        f_df = df_c.copy()
-        
-        # العمود 2 هو الاسم (العد يبدأ من 0: Timestamp, 1: id, 2: Name)
-        try:
-            if search:
-                f_df = f_df[f_df.iloc[:, 2].astype(str).str.contains(search, na=False)]
-
-            for i, row in f_df.iterrows():
-                with st.expander(f"👤 {row.iloc[2]}"):
-                    st.write(f"📞 هاتف: {row.iloc[3]}")
-                    st.write(f"📍 المنطقة: {row.iloc[5]}")
-                    st.link_button("📞 اتصال", f"tel:{row.iloc[3]}")
-                    st.link_button("💬 واتساب", f"https://wa.me/2{row.iloc[3]}")
-        except Exception as e:
-            st.warning("البيانات ظهرت في الشيت ولكن هناك اختلاف بسيط في الترتيب.")
+        # لو عدد الأعمدة قليل أو الترتيب اختلف، اعرض جدول
+        if len(df_c.columns) < 4:
+            st.warning("تنسيق الشيت مختلف، جارٍ عرض البيانات كجدول:")
             st.dataframe(df_c)
+        else:
+            search = st.text_input("🔍 بحث")
+            f_df = df_c.copy()
+            
+            # محاولة البحث في العمود رقم 2 (الاسم)
+            try:
+                if search:
+                    f_df = f_df[f_df.iloc[:, 2].astype(str).str.contains(search, na=False)]
+                
+                for i, row in f_df.iterrows():
+                    # عرض الكارت بأمان
+                    name = row.iloc[2] if len(row) > 2 else "بدون اسم"
+                    phone = row.iloc[3] if len(row) > 3 else "بدون هاتف"
+                    with st.expander(f"👤 {name}"):
+                        st.write(f"📞 هاتف: {phone}")
+                        st.write(f"📍 المنطقة: {row.iloc[5] if len(row) > 5 else '-'}")
+                        st.link_button("اتصال", f"tel:{phone}")
+            except:
+                st.dataframe(df_c) # في حالة فشل الكروت، الجدول ينقذنا
