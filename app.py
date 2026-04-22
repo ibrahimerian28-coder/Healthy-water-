@@ -2,63 +2,53 @@ import streamlit as st
 import pandas as pd
 import requests
 
-# --- الإعدادات ---
+# --- 1. الإعدادات ---
 st.set_page_config(page_title="Healthy Water Pro", page_icon="💧")
 
-# الرابط المباشر لصفحة Customers
-API_URL = "https://api.steinhq.com/v1/storages/69e90c9f3807a370b05f5982/Customers"
+# ⚠️ حط هنا الرابط الجديد اللي هيطلعلك بعد ما تمسح الـ API وتعمله تاني
+NEW_API_URL = "حط_الرابط_الجديد_هنا" 
+# اسم الصفحة في الشيت (تأكد إنها Data)
+SHEET_NAME = "Data"
 
-# --- دالة جلب البيانات ---
+# --- 2. دالة جلب البيانات ---
 def get_data():
     try:
-        res = requests.get(API_URL, timeout=10)
+        res = requests.get(f"{NEW_API_URL}/{SHEET_NAME}", timeout=10)
         if res.status_code == 200:
-            data = res.json()
-            if isinstance(data, list) and len(data) > 0:
-                return pd.DataFrame(data)
+            return pd.DataFrame(res.json())
         return pd.DataFrame()
     except:
         return pd.DataFrame()
 
-# --- الواجهة ---
+# --- 3. الواجهة ---
 st.title("💧 نظام إدارة العملاء")
-menu = st.sidebar.selectbox("القائمة", ["إضافة عميل جديد", "عرض كل العملاء"])
+menu = st.sidebar.radio("القائمة", ["إضافة عميل", "عرض العملاء"])
 
-if menu == "إضافة عميل جديد":
-    st.subheader("📝 تسجيل بيانات عميل")
-    with st.form("add_form", clear_on_submit=True):
-        # استخدمنا أسامي إنجليزية بسيطة "name" و "phone" عشان السيرفر ميزعلش
-        name = st.text_input("اسم العميل")
-        phone = st.text_input("رقم الهاتف")
-        area = st.text_input("المنطقة")
-        
-        if st.form_submit_button("✅ حفظ البيانات"):
+if menu == "إضافة عميل":
+    st.subheader("📝 تسجيل جديد")
+    with st.form("new_form", clear_on_submit=True):
+        name = st.text_input("الاسم")
+        phone = st.text_input("الهاتف")
+        if st.form_submit_button("✅ حفظ"):
             if name and phone:
-                # الـ payload ده هو اللي Stein هيفهمه فوراً
-                payload = [{"name": name, "phone": phone, "area": area}]
-                
+                # بنبعت العناوين بالإنجليزي name و phone
+                payload = [{"name": name, "phone": phone}]
                 try:
-                    # بنبعت الداتا "خبط لزق" للسيرفر
-                    resp = requests.post(API_URL, json=payload, timeout=15)
-                    
+                    resp = requests.post(f"{NEW_API_URL}/{SHEET_NAME}", json=payload)
                     if resp.status_code == 200:
-                        st.success(f"تم تسجيل {name} بنجاح.. السيرفر رضي عننا!")
+                        st.success("أخيراً! البيانات وصلت للشيت.")
                         st.balloons()
                     else:
                         st.error(f"السيرفر لسه مقمص: {resp.text}")
                 except:
-                    st.error("فيه خناقة في الشبكة، جرب تاني!")
+                    st.error("مشكلة في الاتصال")
             else:
-                st.warning("لازم تكتب الاسم والرقم يا هندسة!")
+                st.warning("دخل البيانات")
 
 else:
-    st.subheader("👥 قائمة العملاء المسجلين")
-    if st.button("🔄 تحديث القائمة"):
-        st.cache_data.clear()
-        st.rerun()
-        
+    st.subheader("👥 قائمة العملاء")
     df = get_data()
     if not df.empty:
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
     else:
-        st.info("الشيت لسه مفيش فيه داتا.. سجل أول عميل!")
+        st.info("لا توجد بيانات حالياً في صفحة Data.")
