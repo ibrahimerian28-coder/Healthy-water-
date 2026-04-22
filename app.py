@@ -1,31 +1,25 @@
 import streamlit as st
 import pandas as pd
 import requests
-from io import StringIO
 from datetime import datetime, timedelta
 
 # --- 1. الإعدادات ---
-st.set_page_config(page_title="Healthy Water Pro", layout="wide")
+st.set_page_config(page_title="Healthy Water Database", layout="wide")
 
-# روابط القراءة (تأكد من اسم الصفحة في الشيت)
-SHEET_ID = "1f3wgOq_s0Aies7JasDzKFz8R38U39hTa5IUoJTZYL30"
-# ملاحظة: غير "Customers" لـ "Form Responses 1" لو البيانات بتنزل في صفحة الفورم الجديدة
-CLIENTS_READ_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Form%20Responses%201"
+# الرابط اللي هتاخده من موقع SheetDB
+API_URL = "https://sheetdb.io/api/v1/25ojnsldblcqy"
 
-# رابط الإرسال
-FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeQa4UJW8n9-8lCipPgrUGBbTSmfxNizON86zDfWgw6pmOmYw/formResponse"
-
-# --- 2. وظائف البيانات ---
-def load_data(url):
+# --- 2. وظيفة تحميل البيانات ---
+def load_data():
     try:
-        res = requests.get(url)
-        if res.status_code == 200:
-            return pd.read_csv(StringIO(res.text))
+        response = requests.get(API_URL)
+        if response.status_code == 200:
+            return pd.DataFrame(response.json())
         return pd.DataFrame()
     except:
         return pd.DataFrame()
 
-df_c = load_data(CLIENTS_READ_URL)
+df_c = load_data()
 
 # --- 3. نظام الدخول ---
 if 'role' not in st.session_state: st.session_state.role = None
@@ -38,58 +32,57 @@ if st.session_state.role is None:
             st.rerun()
     st.stop()
 
-# --- 4. تسجيل عميل جديد (الإرسال المطور) ---
+# --- 4. القائمة ---
 menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "تسجيل عميل جديد"])
 
+# --- 5. تسجيل عميل جديد (حفظ حقيقي ومباشر) ---
 if menu == "تسجيل عميل جديد":
     st.header("📝 إضافة عميل جديد")
-    with st.form("add_client_form", clear_on_submit=True):
+    with st.form("add_form", clear_on_submit=True):
         name = st.text_input("اسم العميل")
         phones = st.text_input("الأرقام")
         addr = st.text_input("العنوان")
         area = st.text_input("المنطقة")
-        loc = st.text_input("رابط اللوكيشن")
         cycle = st.number_input("دورة الصيانة (شهور)", value=3)
         
-        if st.form_submit_button("✅ حفظ"):
+        if st.form_submit_button("✅ حفظ في الإكسيل"):
             if name and phones:
-                # ميكانيكا الـ ID (تجاوز لو الشيت فاضي)
-                try:
-                    new_id = 101 if df_c.empty else int(df_c.iloc[:,1].max()) + 1
-                except:
-                    new_id = 101
-
-                # تجهيز البيانات
-                form_data = {
-                    "entry.1872338545": new_id,
-                    "entry.1466263036": name,
-                    "entry.334977578": phones,
-                    "entry.1604703615": addr,
-                    "entry.51378520": area,
-                    "entry.1332478222": loc,
-                    "entry.1671668465": cycle,
-                    "entry.416270816": str(datetime.now().date()),
-                    "entry.1371491317": "لم تتم"
+                # حساب الـ ID
+                new_id = 101 if df_c.empty else int(df_c.iloc[:,0].astype(int).max()) + 1
+                
+                # تجهيز البيانات (لازم الأسماء تطابق أول صف في الشيت)
+                new_data = {
+                    "data": [{
+                        "id": new_id,
+                        "اسم العميل": name,
+                        "الهواتف": phones,
+                        "العنوان": addr,
+                        "المنطقه": area,
+                        "دورة الصيانة": cycle,
+                        "تاريخ الزيارة القادمة": str(datetime.now().date()),
+                        "تاريخ آخر زيارة": "لم تتم"
+                    }]
                 }
                 
-                # إضافة Header لإيهام جوجل إنه متصفح حقيقي
-                headers = {'Referer': FORM_URL, 'User-Agent': "Mozilla/5.0"}
-                
-                try:
-                    response = requests.post(FORM_URL, data=form_data, headers=headers)
-                    # جوجل فورم بترجع 200 حتى لو الصفحة ظهرت، المهم البيانات تتبعت
-                    st.success(f"تم إرسال الطلب للعميل: {name}")
-                    st.info("افتح شيت الإكسيل الآن للتأكد من وصول البيانات")
+                # الإرسال لـ SheetDB
+                res = requests.post(API_URL, json=new_data)
+                if res.status_code == 201:
+                    st.success(f"مبروك يا هندسة! العميل {name} اتسجل في الشيت")
                     st.balloons()
-                except Exception as e:
-                    st.error(f"فشل الاتصال: {e}")
+                else:
+                    st.error("فشل الحفظ، تأكد من رابط API")
             else:
-                st.warning("برجاء إدخال البيانات")
+                st.warning("دخل الاسم والرقم")
 
-# --- 5. عرض البيانات ---
+# --- 6. عرض البيانات ---
 elif menu == "بيانات العملاء":
-    st.header("👥 العملاء")
+    st.header("👥 العملاء في الشيت")
     if df_c.empty:
-        st.info("لا توجد بيانات حالياً في صفحة Form Responses 1")
+        st.info("الشيت فاضي أو الرابط مش مظبوط")
     else:
-        st.dataframe(df_c)
+        # عرض البيانات بشكل منظم
+        for i, row in df_c.iterrows():
+            with st.expander(f"👤 {row['اسم العميل']}"):
+                st.write(f"📞 هاتف: {row['الهواتف']}")
+                st.write(f"🏠 العنوان: {row['العنوان']}")
+                st.link_button("اتصال", f"tel:{row['الهواتف']}")
