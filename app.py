@@ -3,13 +3,10 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-# --- 1. الإعدادات ---
+# --- 1. الإعدادات العامة ---
 st.set_page_config(page_title="Healthy Water", layout="wide")
 
-LOGO_URL = "https://raw.githubusercontent.com/alshatby/healthy-water-/main/logo.png"
-BG_URL = "https://raw.githubusercontent.com/alshatby/healthy-water-/main/background.png"
-
-# --- 2. إدارة البيانات ---
+# --- 2. إدارة قواعد البيانات ---
 def load_db(file, cols):
     if os.path.exists(file): return pd.read_csv(file)
     return pd.DataFrame(columns=cols)
@@ -17,126 +14,116 @@ def load_db(file, cols):
 def save_db(df, file): df.to_csv(file, index=False)
 
 C_COLS = ['id', 'اسم العميل', 'الهواتف', 'العنوان', 'المنطقه', 'الموقع', 'دورة الصيانة', 'تاريخ الزيارة القادمة', 'تاريخ آخر زيارة']
-H_COLS = ['id_عميل', 'اسم العميل', 'تاريخ الزيارة', 'التفاصيل', 'المبلغ']
-S_COLS = ['العنصر', 'الكميه', 'سعر الوحده', 'القيمه الاجماليه']
+H_COLS = ['id_زيارة', 'id_عميل', 'تاريخ الزيارة', 'p1', 'p2', 'p3', 'ممبرين', 'بوست كاربون', 'كالسيت', 'انفر ريد', 'اخري', 'المبلغ']
 
-df_c = load_db("customers_final.csv", C_COLS)
-df_h = load_db("history_final.csv", H_COLS)
-df_s = load_db("stock_final.csv", S_COLS)
+df_c = load_db("customers_v4.csv", C_COLS)
+df_h = load_db("history_v4.csv", H_COLS)
 
 # --- 3. نظام الدخول ---
 if 'role' not in st.session_state: st.session_state.role = None
 if st.session_state.role is None:
-    st.image(LOGO_URL, width=150)
-    st.title("💧 Healthy Water")
-    pwd = st.text_input("باسورد المدير", type="password")
-    if st.button("دخول الإدارة"):
+    st.title("💧 Healthy Water - تسجيل الدخول")
+    pwd = st.text_input("كلمة مرور الإدارة", type="password")
+    if st.button("دخول"):
         if pwd == "HgM18082019$&)":
             st.session_state.role = "admin"
             st.rerun()
     st.stop()
 
 # --- 4. القائمة الجانبية ---
-st.sidebar.image(LOGO_URL, width=80)
-menu = st.sidebar.radio("القائمة الرئيسية", ["بيانات العملاء", "تسجيل عميل جديد", "سجل الصيانات", "المخزن"])
+menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "تسجيل عميل جديد", "سجل الصيانات العام"])
 
-# --- 5. صفحة تسجيل عميل جديد ---
+# --- 5. تسجيل عميل جديد ---
 if menu == "تسجيل عميل جديد":
-    st.header("📝 تسجيل عميل جديد")
-    with st.form("add_form", clear_on_submit=True):
-        name = st.text_input("👤 اسم العميل")
-        phones = st.text_input("📞 الهواتف (فاصلة بين الأرقام)")
-        addr = st.text_area("🏠 العنوان")
-        area = st.text_input("📍 المنطقة")
-        loc = st.text_input("🔗 رابط اللوكيشن من جوجل مابس")
-        cycle = st.number_input("📅 دورة الصيانة (شهور)", min_value=1, value=3)
-        last_v = st.date_input("🗓️ تاريخ آخر زيارة", value=datetime.now().date())
-        
-        if st.form_submit_button("✅ حفظ"):
+    st.header("📝 إضافة عميل جديد")
+    with st.form("add_client"):
+        name = st.text_input("اسم العميل")
+        phones = st.text_input("الأرقام (ضع فاصلة بين كل رقم)")
+        addr = st.text_input("العنوان")
+        area = st.text_input("المنطقة")
+        loc = st.text_input("رابط جوجل مابس")
+        cycle = st.number_input("دورة الصيانة (شهور)", value=3)
+        if st.form_submit_button("حفظ"):
             new_id = 101 if df_c.empty else int(df_c['id'].max()) + 1
-            next_v = last_v + timedelta(days=int(cycle) * 30)
-            new_row = {'id': new_id, 'اسم العميل': name, 'الهواتف': phones, 'العنوان': addr, 'المنطقه': area, 'الموقع': loc, 'دورة الصيانة': cycle, 'تاريخ الزيارة القادمة': str(next_v), 'تاريخ آخر زيارة': str(last_v)}
+            new_row = {'id': new_id, 'اسم العميل': name, 'الهواتف': phones, 'العنوان': addr, 'المنطقه': area, 'الموقع': loc, 'دورة الصيانة': cycle, 'تاريخ الزيارة القادمة': str(datetime.now().date()), 'تاريخ آخر زيارة': 'لم تتم'}
             df_c = pd.concat([df_c, pd.DataFrame([new_row])], ignore_index=True)
-            save_db(df_c, "customers_final.csv")
-            st.success(f"تم الحفظ! كود العميل: {new_id}")
+            save_db(df_c, "customers_v4.csv")
+            st.success(f"تم الحفظ بكود {new_id}")
 
-# --- 6. صفحة بيانات العملاء (عرض الكروت) ---
+# --- 6. صفحة بيانات العملاء (العرض والتعديل) ---
 elif menu == "بيانات العملاء":
-    st.header("👥 قائمة العملاء")
-    search = st.text_input("🔎 ابحث بالاسم أو الرقم أو الكود")
+    st.header("👥 قاعدة بيانات العملاء")
+    search = st.text_input("🔎 ابحث بالاسم أو الرقم")
     
     f_df = df_c.copy()
     if search:
-        f_df = f_df[f_df['اسم العميل'].str.contains(search, na=False) | f_df['الهواتف'].str.contains(search, na=False) | (f_df['id'].astype(str) == search)]
+        f_df = f_df[f_df['اسم العميل'].str.contains(search, na=False) | f_df['الهواتف'].str.contains(search, na=False)]
 
     for i, row in f_df.iterrows():
-        # تحديد لون الحالة
-        try:
-            diff = (pd.to_datetime(row['تاريخ الزيارة القادمة']).date() - datetime.now().date()).days
-            color = "🔴 متأخر" if diff < 0 else "🟡 قريب" if diff <= 7 else "🟢 منتظم"
-        except: color = "⚪ غير محدد"
-
-        with st.container():
-            st.markdown(f"""
-            <div style="background-color: white; padding: 15px; border-radius: 10px; border-right: 5px solid {'red' if diff < 0 else 'green'}; margin-bottom: 10px; color: black;">
-                <h4>ID: {row['id']} | {row['اسم العميل']} <span style="float:left; font-size: 14px;">{color}</span></h4>
-                <p>📍 {row['المنطقه']} - {row['العنوان']}</p>
-                <p>🗓️ الموعد القادم: <b>{row['تاريخ الزيارة القادمة']}</b></p>
-            </div>
-            """, unsafe_allow_html=True)
+        with st.expander(f"📌 {row['id']} - {row['اسم العميل']} | {row['المنطقه']}"):
+            tab_info, tab_edit, tab_history = st.tabs(["📄 بيانات العميل", "✏️ تعديل البيانات", "🔧 سجل الصيانات"])
             
-            c1, c2, c3 = st.columns(3)
-            # زر الاتصال
-            main_phone = str(row['الهواتف']).split(',')[0].strip()
-            c1.link_button("📞 اتصل الآن", f"tel:{main_phone}", use_container_width=True)
-            # زر اللوكيشن
-            if pd.notna(row['الموقع']) and "http" in str(row['الموقع']):
-                c2.link_button("📍 فتح الخرائط", row['الموقع'], use_container_width=True)
-            else:
-                c2.button("🚫 لا يوجد موقع", disabled=True, use_container_width=True)
-            # زر الواتساب
-            c3.link_button("💬 واتساب", f"https://wa.me/2{main_phone}", use_container_width=True)
-            st.divider()
-
-# --- 7. سجل الصيانات ---
-elif menu == "سجل الصيانات":
-    st.header("🔧 تسجيل صيانة جديدة")
-    if df_c.empty:
-        st.warning("لا يوجد عملاء مسجلين حالياً.")
-    else:
-        with st.form("service_form"):
-            customer_list = df_c.apply(lambda x: f"{x['id']} - {x['اسم العميل']}", axis=1).tolist()
-            selected = st.selectbox("اختر العميل", customer_list)
-            v_date = st.date_input("تاريخ الزيارة", value=datetime.now().date())
-            
-            p_cols = st.columns(3)
-            p1 = p_cols[0].checkbox("شمعة 1")
-            p2 = p_cols[1].checkbox("شمعة 2")
-            p3 = p_cols[2].checkbox("شمعة 3")
-            
-            details = st.text_area("تفاصيل إضافية (ممبرين، قطع غيار...)")
-            amount = st.number_input("المبلغ المحصل", min_value=0)
-            
-            if st.form_submit_button("✅ حفظ الصيانة"):
-                c_id = int(selected.split(" - ")[0])
-                c_name = selected.split(" - ")[1]
-                new_h = {'id_عميل': c_id, 'اسم العميل': c_name, 'تاريخ الزيارة': str(v_date), 'التفاصيل': details, 'المبلغ': amount}
-                df_h = pd.concat([df_h, pd.DataFrame([new_h])], ignore_index=True)
-                save_db(df_h, "history_final.csv")
+            with tab_info:
+                st.write(f"**العنوان:** {row['العنوان']}")
+                # عرض كل أرقام الهاتف مع أزرار
+                phone_list = str(row['الهواتف']).split(',')
+                for p in phone_list:
+                    p = p.strip()
+                    c1, c2, c3 = st.columns([2, 1, 1])
+                    c1.write(f"📞 {p}")
+                    c2.link_button("اتصال", f"tel:{p}")
+                    c3.link_button("واتساب", f"https://wa.me/2{p}")
                 
-                # تحديث ميعاد الزيارة القادمة تلقائياً للعميل
-                cycle = df_c.loc[df_c['id'] == c_id, 'دورة الصيانة'].values[0]
-                next_v = v_date + timedelta(days=int(cycle) * 30)
-                df_c.loc[df_c['id'] == c_id, 'تاريخ الزيارة القادمة'] = str(next_v)
-                df_c.loc[df_c['id'] == c_id, 'تاريخ آخر زيارة'] = str(v_date)
-                save_db(df_c, "customers_final.csv")
-                
-                st.success("تم تسجيل الصيانة وتحديث ميعاد الزيارة القادم!")
+                if pd.notna(row['الموقع']) and "http" in str(row['الموقع']):
+                    st.link_button("📍 فتح الموقع على الخريطة", row['الموقع'])
 
-    st.subheader("📜 سجل الزيارات السابق")
+            with tab_edit:
+                with st.form(f"edit_{row['id']}"):
+                    u_name = st.text_input("الاسم", value=row['اسم العميل'])
+                    u_phones = st.text_input("الهواتف", value=row['الهواتف'])
+                    u_addr = st.text_input("العنوان", value=row['العنوان'])
+                    u_loc = st.text_input("الموقع", value=row['الموقع'])
+                    if st.form_submit_button("تحديث البيانات"):
+                        df_c.loc[df_c['id'] == row['id'], ['اسم العميل', 'الهواتف', 'العنوان', 'الموقع']] = [u_name, u_phones, u_addr, u_loc]
+                        save_db(df_c, "customers_v4.csv")
+                        st.success("تم التعديل")
+                        st.rerun()
+
+            with tab_history:
+                st.subheader("➕ إضافة زيارة جديدة")
+                with st.form(f"visit_{row['id']}"):
+                    v_date = st.date_input("تاريخ الزيارة", value=datetime.now().date())
+                    c1, c2, c3, c4 = st.columns(4)
+                    p1 = c1.checkbox("P1")
+                    p2 = c2.checkbox("P2")
+                    p3 = c3.checkbox("P3")
+                    mem = c4.checkbox("ممبرين")
+                    post = c1.checkbox("بوست")
+                    calc = c2.checkbox("كالسيت")
+                    infra = c3.checkbox("انفرا")
+                    other = st.text_input("قطع أخرى")
+                    price = st.number_input("المبلغ", min_value=0)
+                    
+                    if st.form_submit_button("حفظ الزيارة"):
+                        v_id = 1 if df_h.empty else int(df_h['id_زيارة'].max()) + 1
+                        new_v = {'id_زيارة': v_id, 'id_عميل': row['id'], 'تاريخ الزيارة': str(v_date), 'p1': p1, 'p2': p2, 'p3': p3, 'ممبرين': mem, 'بوست كاربون': post, 'كالسيت': calc, 'انفر ريد': infra, 'اخري': other, 'المبلغ': price}
+                        df_h = pd.concat([df_h, pd.DataFrame([new_v])], ignore_index=True)
+                        save_db(df_h, "history_v4.csv")
+                        # تحديث ميعاد القادم
+                        next_v = v_date + timedelta(days=int(row['دورة الصيانة']) * 30)
+                        df_c.loc[df_c['id'] == row['id'], 'تاريخ الزيارة القادمة'] = str(next_v)
+                        save_db(df_c, "customers_v4.csv")
+                        st.rerun()
+
+                st.subheader("📜 الزيارات السابقة (يمكنك التعديل مباشرة)")
+                client_h = df_h[df_h['id_عميل'] == row['id']]
+                edited_h = st.data_editor(client_h, key=f"editor_{row['id']}")
+                if st.button("حفظ تعديلات الزيارات", key=f"btn_{row['id']}"):
+                    df_h.update(edited_h)
+                    save_db(df_h, "history_v4.csv")
+                    st.success("تم تحديث السجل")
+
+# --- 7. سجل الصيانات العام ---
+elif menu == "سجل الصيانات العام":
+    st.header("📋 سجل الزيارات الكلي")
     st.dataframe(df_h, use_container_width=True)
-
-# --- خروج ---
-if st.sidebar.button("خروج"):
-    st.session_state.role = None
-    st.rerun()
