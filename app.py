@@ -82,21 +82,30 @@ if menu == "🔍 بحث وإدارة العملاء":
                         if special != "nan" and special != "":
                             st.warning(f"🔔 موعد خاص: {special}")
 
-                # --- عرض جدول سجل الصيانات بالكامل ---
+                                # --- عرض جدول سجل الصيانات بالكامل ---
                 st.markdown("### 📜 سجل الصيانات السابقة")
                 if not customer_history.empty:
-                    # تحويل التاريخ لشكل نصي للعرض فقط
+                    # نسخة للعرض فقط عشان ما نأثرش على الحسابات
                     display_df = customer_history.copy()
                     display_df['تاريخ الزيارة'] = display_df['تاريخ الزيارة'].dt.strftime('%Y-%m-%d')
                     
-                    # اختيار الأعمدة المهمة للعرض
-                    cols_to_show = ['تاريخ الزيارة', 'P1', 'P2', 'P3', 'ممبرين', 'بوست كاربون', 'كالسيت', 'انفرا ريد', 'اخري', 'التكلفه', 'ملاحظات']
-                    # التأكد من وجود الأعمدة في الشيت
+                    # اختيار أعمدة الشمعات فقط لتحويلها لعلامات
+                    shama3at_cols = ['P1', 'P2', 'P3', 'ممبرين', 'بوست كاربون', 'كالسيت', 'انفرا ريد']
+                    
+                    for col in shama3at_cols:
+                        if col in display_df.columns:
+                            # لو الخانة فيها "تم" أو "1" حط صح، غير كده حط غلط
+                            display_df[col] = display_df[col].apply(lambda x: "✅" if str(x).strip() in ["تم", "1", "True", "Yes"] else "❌")
+                    
+                    # اختيار الأعمدة المهمة للعرض بالترتيب
+                    cols_to_show = ['تاريخ الزيارة'] + shama3at_cols + ['اخري', 'التكلفه', 'ملاحظات']
                     available_cols = [c for c in cols_to_show if c in display_df.columns]
                     
+                    # عرض الجدول
                     st.table(display_df[available_cols])
                 else:
                     st.write("لم يتم تسجيل أي زيارات سابقة لهذا العميل.")
+
 
                 st.markdown("---")
                 st.write("**📞 أرقام التواصل:**")
