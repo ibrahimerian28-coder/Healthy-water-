@@ -4,12 +4,13 @@ import requests
 from datetime import datetime, timedelta
 import uuid
 
-# --- 1. الإعدادات والروابط ---
+# --- 1. الإعدادات ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="💧")
 
 # الرابط الجديد المبروك
 API_URL = "https://api.steinhq.com/v1/storages/69e9c6d592b1163e973de148"
 
+# دوال التعامل مع السيرفر
 def get_data(sheet):
     try:
         res = requests.get(f"{API_URL}/{sheet}", timeout=10)
@@ -17,11 +18,14 @@ def get_data(sheet):
     except: return pd.DataFrame()
 
 def send_post(sheet, payload):
-    return requests.post(f"{API_URL}/{sheet}", json=payload)
+    try:
+        resp = requests.post(f"{API_URL}/{sheet}", json=payload, timeout=15)
+        return resp
+    except Exception as e: return str(e)
 
 # --- 2. القائمة الجانبية ---
 st.sidebar.title("🌊 Healthy Water")
-st.sidebar.info("01286609535")
+st.sidebar.markdown("---")
 menu = st.sidebar.radio("القائمة الرئيسية", 
     ["➕ إضافة عميل جديد", "🔍 إدارة العملاء وتواصل", "🛠️ تسجيل صيانة", "📅 جدول الأسبوع"])
 
@@ -37,7 +41,7 @@ if menu == "➕ إضافة عميل جديد":
         with col2:
             location = st.text_input("رابط لوكيشن جوجل")
             install_date = st.date_input("تاريخ التركيب", datetime.now())
-            p_raw = st.text_area("أرقام الهاتف (ضع كل رقم في سطر.. مثال: +20123456789)")
+            p_raw = st.text_area("أرقام الهاتف (كل رقم في سطر.. مثال: +20123456789)")
         
         if st.form_submit_button("✅ حفظ البيانات"):
             if name and p_raw:
@@ -48,10 +52,12 @@ if menu == "➕ إضافة عميل جديد":
                     "address": address, "area": area, "location": location,
                     "install_date": str(install_date)
                 }]
-                if send_post("Data", payload).status_code == 200:
-                    st.success(f"تم التسجيل! كود العميل: {cust_id}")
+                res = send_post("Data", payload)
+                if hasattr(res, 'status_code') and res.status_code == 200:
+                    st.success(f"تم التسجيل بنجاح! كود العميل: {cust_id}")
                     st.balloons()
-                else: st.error("عطل في السيرفر")
+                else:
+                    st.error(f"فشل الحفظ: {res.text if hasattr(res, 'text') else res}")
 
 # --- 4. إدارة العملاء وتواصل سريع ---
 elif menu == "🔍 إدارة العملاء وتواصل":
@@ -68,21 +74,21 @@ elif menu == "🔍 إدارة العملاء وتواصل":
                 with c1:
                     st.write(f"🏠 **العنوان:** {row['address']}")
                     st.write(f"📅 **التركيب:** {row['install_date']}")
+                    st.write(f"🔑 **ID:** {row['id']}")
                 with c2:
-                    if row['location']:
+                    if row['location'] and "http" in str(row['location']):
                         st.markdown(f"[📍 فتح الخريطة]({row['location']})")
                 
                 st.write("---")
-                # أزرار التواصل
                 try:
                     phones = eval(row['phones_json'])
                     for p in phones:
                         num = p['number'].replace(" ", "")
                         clean_num = num.replace("+", "")
-                        col_a, col_b, col_c = st.columns([2, 1, 1])
-                        col_a.write(f"📞 {num}")
-                        col_b.markdown(f"[📞 اتصل](tel:{num})")
-                        col_c.markdown(f"[💬 واتساب](https://wa.me/{clean_num})")
+                        cola, colb, colc = st.columns([2, 1, 1])
+                        cola.write(f"📞 {num}")
+                        colb.markdown(f"[📞 اتصل](tel:{num})")
+                        colc.markdown(f"[💬 واتساب](https://wa.me/{clean_num})")
                 except: st.write("لا توجد أرقام")
 
 # --- 5. تسجيل صيانة (Checkboxes) ---
@@ -114,9 +120,10 @@ elif menu == "🛠️ تسجيل صيانة":
                     "infra": str(infra), "others": others, "amount": str(amount),
                     "next_visit": str(next_date)
                 }]
-                if send_post("Maintenance", m_payload).status_code == 200:
+                res = send_post("Maintenance", m_payload)
+                if hasattr(res, 'status_code') and res.status_code == 200:
                     st.success(f"تم تسجيل زيارة {target} بنجاح!")
-    else: st.warning("سجل عملاء أولاً")
+                else: st.error("فشل تسجيل الصيانة.. تأكد من اسم صفحة Maintenance")
 
 # --- 6. جدول الأسبوع ---
 elif menu == "📅 جدول الأسبوع":
