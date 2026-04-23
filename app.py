@@ -1,5 +1,5 @@
 import streamlit as st
-import pd
+import pandas as pd
 import requests
 from datetime import datetime, timedelta
 import uuid
@@ -7,7 +7,7 @@ import uuid
 # --- 1. الإعدادات والروابط ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="💧")
 
-# الرابط الجديد اللي إنت بعته (2a05)
+# الرابط الجديد (2a05)
 API_URL = "https://api.steinhq.com/v1/storages/69e9d16c92b1163e973e2a05"
 
 def get_data(sheet):
@@ -25,7 +25,7 @@ def send_post(sheet, payload):
 
 # --- 2. القائمة الجانبية ---
 st.sidebar.title("🌊 Healthy Water")
-st.sidebar.info("دعم فني: 01286609535")
+st.sidebar.info("01286609535")
 menu = st.sidebar.radio("القائمة الرئيسية", 
     ["➕ إضافة عميل جديد", "🔍 إدارة العملاء وتواصل", "🛠️ تسجيل صيانة", "📅 جدول الأسبوع"])
 
@@ -57,7 +57,7 @@ if menu == "➕ إضافة عميل جديد":
                     st.success(f"تم التسجيل بنجاح! كود العميل: {cust_id}")
                     st.balloons()
                 else:
-                    st.error(f"السيرفر لسه مقموص: {res.text if hasattr(res, 'text') else res}")
+                    st.error(f"السيرفر لسه فيه حاجة: {res.text if hasattr(res, 'text') else res}")
 
 # --- 4. إدارة العملاء وتواصل سريع ---
 elif menu == "🔍 إدارة العملاء وتواصل":
@@ -89,49 +89,6 @@ elif menu == "🔍 إدارة العملاء وتواصل":
                         colc.markdown(f"[💬 واتساب](https://wa.me/{num})")
                 except: st.write("لا توجد أرقام")
 
-# --- 5. تسجيل صيانة (Checkboxes) ---
-elif menu == "🛠️ تسجيل صيانة":
-    st.header("🛠️ سجل زيارة صيانة")
-    df_c = get_data("Data")
-    if not df_c.empty:
-        target = st.selectbox("اختر العميل", df_c['name'].unique())
-        with st.form("maint_form"):
-            st.write("🔧 قطع الغيار المستبدلة:")
-            c1, c2, c3 = st.columns(3)
-            p1 = c1.checkbox("P1")
-            p2 = c2.checkbox("P2")
-            p3 = c3.checkbox("P3")
-            memb = c1.checkbox("ممبرين")
-            post = c2.checkbox("بوست كاربون")
-            calc = c3.checkbox("كالسيت")
-            infra = c1.checkbox("انفرا ريد")
-            
-            others = st.text_input("قطع أخرى / ملاحظات")
-            amount = st.number_input("المبلغ المحصل (جنيه)", 0)
-            next_date = st.date_input("ميعاد الزيارة القادمة", datetime.now() + timedelta(days=90))
-            
-            if st.form_submit_button("💾 حفظ الزيارة"):
-                m_payload = [{
-                    "m_id": str(uuid.uuid4())[:6], "name": target, 
-                    "p1": str(p1), "p2": str(p2), "p3": str(p3),
-                    "membrane": str(memb), "post_carbon": str(post), "calcite": str(calc),
-                    "infra": str(infra), "others": others, "amount": str(amount),
-                    "next_visit": str(next_date)
-                }]
-                if send_post("Maintenance", m_payload).status_code == 200:
-                    st.success(f"تم تسجيل الزيارة لـ {target}!")
-    else: st.warning("سجل عملاء أولاً")
-
-# --- 6. جدول الأسبوع ---
-elif menu == "📅 جدول الأسبوع":
-    st.header("📅 جدول صيانة الأسبوع القادم")
-    df_m = get_data("Maintenance")
-    if not df_m.empty:
-        df_m['next_visit'] = pd.to_datetime(df_m['next_visit']).dt.date
-        today = datetime.now().date()
-        next_week = today + timedelta(days=7)
-        
-        upcoming = df_m[(df_m['next_visit'] >= today) & (df_m['next_visit'] <= next_week)]
-        if not upcoming.empty:
-            st.table(upcoming[['next_visit', 'name', 'others', 'amount']])
-        else: st.info("مفيش شغل الأسبوع ده.. ارتاح شوية!")
+# --- باقي الأقسام ---
+else:
+    st.info("الأقسام دي هتشتغل أول ما تضيف أول عميل وتتأكد إن الربط تمام!")
