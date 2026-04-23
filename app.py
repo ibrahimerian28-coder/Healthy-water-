@@ -2,75 +2,65 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- 1. الإعدادات والروابط ---
+# --- 1. الإعدادات ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="💧")
 
-# رابط الشيت للقراءة (Direct CSV)
+# رابط الشيت
 SHEET_ID = "1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI"
-DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid=0"
 
-# رابط الفورم اللي إنت بعته (تم وضعه في مكانه)
+# الحركة دي بتخلينا نقرأ الشيت كله ونختار آخر صفحة اتعملت (اللي فيها الردود)
+DATA_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
+
 GOOGLE_FORM_URL = "https://forms.gle/Pb6SYsxF2Q4PHQMZ9"
 
 def get_google_data(url):
     try:
-        # إضافة timestamp لمنع التخزين المؤقت (Cache) وضمان رؤية أحدث البيانات
+        # كسر الكاش عشان يقرأ اللحظة الحالية
         return pd.read_csv(f"{url}&cache={datetime.now().timestamp()}")
     except:
         return pd.DataFrame()
 
-# --- 2. القائمة الجانبية ---
+# --- 2. الواجهة ---
 st.sidebar.title("🌊 Healthy Water")
-st.sidebar.markdown("---")
-menu = st.sidebar.radio("القائمة الرئيسية", ["🔍 إدارة العملاء وتواصل", "➕ إضافة عميل جديد"])
+menu = st.sidebar.radio("القائمة", ["🔍 إدارة العملاء", "➕ إضافة عميل جديد"])
 
-# --- 3. إدارة العملاء وتواصل سريع ---
-if menu == "🔍 إدارة العملاء وتواصل":
+if menu == "🔍 إدارة العملاء":
     st.header("👤 قاعدة بيانات العملاء")
     
-    if st.button("🔄 تحديث البيانات"):
+    if st.button("🔄 تحديث"):
         st.rerun()
 
     df = get_google_data(DATA_URL)
     
     if not df.empty:
-        search = st.text_input("🔍 ابحث بالاسم أو المنطقة")
+        # البحث
+        search = st.text_input("🔍 ابحث بالاسم")
         if search:
-            # البحث بذكاء في كل الأعمدة
             df = df[df.apply(lambda row: search.lower() in str(row.values).lower(), axis=1)]
         
-        # عرض العملاء في شكل بطاقات (Expander)
+        # ترتيب البيانات بحيث الأحدث يظهر فوق
+        if 'Timestamp' in df.columns:
+            df = df.sort_values(by='Timestamp', ascending=False)
+            
         for _, row in df.iterrows():
-            # ملحوظة: الكود بيحاول يلاقي اسم العمود سواء بالعربي أو الإنجليزي
-            name = row.get('الاسم') or row.get('name') or row.get('Name') or "عميل بدون اسم"
-            area = row.get('المنطقة') or row.get('area') or row.get('Area') or "منطقة غير محددة"
-            phone = str(row.get('الهاتف') or row.get('phone') or row.get('Phone') or "").strip()
-            address = row.get('العنوان') or row.get('address') or row.get('Address') or "لا يوجد عنوان"
-
+            # بنحاول نقرأ الأعمدة بأي اسم (عربي أو إنجليزي)
+            name = row.get('الاسم') or row.get('name') or "عميل جديد"
+            phone = str(row.get('الهاتف') or row.get('رقم التليفون') or "").strip()
+            area = row.get('المنطقة') or row.get('area') or "غير محدد"
+            
             with st.expander(f"👤 {name} | 📍 {area}"):
-                st.write(f"🏠 **العنوان:** {address}")
-                
+                st.write(f"📅 تاريخ التسجيل: {row.get('Timestamp', 'غير معروف')}")
                 if phone:
-                    st.write(f"📞 **الهاتف:** {phone}")
                     cola, colb = st.columns(2)
+                    cola.markdown(f'''<a href="tel:{phone}" style="text-decoration:none;"><button style="width:100%; border-radius:10px; background-color:#007bff; color:white; border:none; padding:10px;">📞 اتصل</button></a>''', unsafe_allow_html=True)
                     
-                    # زر الاتصال
-                    cola.markdown(f'''<a href="tel:{phone}" style="text-decoration:none;"><button style="width:100%; border-radius:10px; background-color:#007bff; color:white; border:none; padding:10px; cursor:pointer;">📞 اتصل الآن</button></a>''', unsafe_allow_html=True)
-                    
-                    # زر الواتساب (تنظيف الرقم)
+                    # تنظيف رقم الواتساب
                     clean_p = "".join(filter(str.isdigit, phone))
-                    if clean_p.startswith("01"):
-                        clean_p = "2" + clean_phone if 'clean_phone' in locals() else "2" + clean_p
+                    if clean_p.startswith("01"): clean_p = "2" + clean_p
                     
-                    colb.markdown(f'''<a href="https://wa.me/{clean_p}" style="text-decoration:none;"><button style="width:100%; border-radius:10px; background-color:#25d366; color:white; border:none; padding:10px; cursor:pointer;">💬 واتساب</button></a>''', unsafe_allow_html=True)
+                    colb.markdown(f'''<a href="https://wa.me/{clean_p}" style="text-decoration:none;"><button style="width:100%; border-radius:10px; background-color:#25d366; color:white; border:none; padding:10px;">💬 واتساب</button></a>''', unsafe_allow_html=True)
     else:
-        st.warning("الجدول فاضي حالياً أو الرابط غير متاح للقراءة.")
-        st.info("تأكد إنك سجلت ردود في الفورم وربطتها بالشيت.")
+        st.warning("البيانات لسه مظهرتش. تأكد من عمل Unlink و Re-link في الفورم.")
 
-# --- 4. إضافة عميل جديد ---
 elif menu == "➕ إضافة عميل جديد":
-    st.header("➕ تسجيل عميل جديد")
-    st.info("سجل البيانات في النموذج بالأسفل، وستظهر في الجدول تلقائياً.")
-    
-    # عرض الـ Google Form داخل التطبيق
-    st.components.v1.iframe(GOOGLE_FORM_URL, height=800, scrolling=True)
+    st.components.v1.iframe(GOOGLE_FORM_URL, height=800)
