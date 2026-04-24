@@ -80,7 +80,8 @@ def create_pdf_bytes(cust_row, maint_df):
     return bytes(pdf.output())
 
 # --- 4. إدارة الصفحات ---
-if os.path.exists("logo.png"): st.image("logo.png", width=200)
+# تكبير اللوجو في التطبيق للضعف (من 200 إلى 400)
+if os.path.exists("logo.png"): st.image("logo.png", width=400) 
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 
 if st.session_state.page == 'Home':
@@ -105,19 +106,20 @@ elif st.session_state.page == 'search':
                 with col1:
                     st.write(f"🏠 العنوان: {row.get('العنوان', '---')}")
                     st.write("📞 أرقام التواصل:")
-                    # --- الجزء المحدث: تكرار الزراير لكل رقم هاتف ---
+                    # تحسين عملية تقسيم الأرقام لتشمل كل الأرقام الموجودة في الخانة
                     p_text = str(row.get('الأرقام', ''))
-                    p_list = re.split(r'[ ,/\\|]+', p_text) # تقسيم النص بناءً على المسافات أو الفواصل
-                    for p in p_list:
-                        clean_p = ''.join(filter(str.isdigit, p))
-                        if len(clean_p) >= 10: # التأكد إنه رقم حقيقي
-                            st.markdown(f"""
-                            <div class="phone-container">
-                                <b>{clean_p}</b><br>
-                                <a href="tel:{clean_p}"><img src="https://img.icons8.com/color/24/000000/phone.png"/> اتصال</a> | 
-                                <a href="https://wa.me/2{clean_p}"><img src="https://img.icons8.com/color/24/000000/whatsapp.png"/> واتساب</a>
-                            </div>
-                            """, unsafe_allow_html=True)
+                    # تقسيم النص بناءً على أي حرف ليس رقماً، ثم فلترة القيم الفارغة
+                    p_list = re.split(r'[^0-9]+', p_text) 
+                    p_list = [p for p in p_list if len(p) >= 10]
+                    
+                    for clean_p in p_list:
+                        st.markdown(f"""
+                        <div class="phone-container">
+                            <b>{clean_p}</b><br>
+                            <a href="tel:{clean_p}"><img src="https://img.icons8.com/color/24/000000/phone.png"/> اتصال</a> | 
+                            <a href="https://wa.me/2{clean_p}"><img src="https://img.icons8.com/color/24/000000/whatsapp.png"/> واتساب</a>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     if "http" in str(row.get('اللوكيشن', '')): st.markdown(f"[📍 اللوكيشن]({row.get('اللوكيشن')})")
                 with col2:
@@ -136,7 +138,6 @@ elif st.session_state.page == 'search':
                     st.table(disp_m)
                 st.download_button("📄 تحميل تقرير PDF", create_pdf_bytes(row, this_m), f"{c_name}.pdf", key=f"pdf_{c_name}")
 
-# (باقي الصفحات Schedule, Add Maint, Add Customer تظل كما هي في الكود السابق)
 elif st.session_state.page == 'schedule':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
     st.header("📋 جدول المواعيد")
