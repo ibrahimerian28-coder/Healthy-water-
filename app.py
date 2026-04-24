@@ -54,22 +54,45 @@ if 'page' not in st.session_state: st.session_state.page = 'Home'
 
 # --- 5. الهيدر ---
 if os.path.exists("logo.png"):
-        # عرض اللوجو بدون تحديد عرض قاسي لضمان الجودة
-        st.image("logo.png", use_container_width=False, width=250)
+    # استخدام HTML لعرض الصورة بجودتها الأصلية مع تحديد عرض مناسب
+    st.markdown(
+        f"""
+        <div style="text-align: left;">
+            <img src="data:image/png;base64,{st.image_crop if 'image_crop' in locals() else ''}" 
+                 style="width: 180px; height: auto; image-rendering: -webkit-optimize-contrast;">
+        /* كود لإجبار الأعمدة تظهر جنب بعض حتى في الموبايل */
+[data-testid="column"] {
+    width: calc(50% - 1rem) !important;
+    flex: 1 1 calc(50% - 1rem) !important;
+    min-width: calc(50% - 1rem) !important;
+}
+
+        </div>
+        """, 
+        unsafe_allow_html=True
+    )
+    # الطريقة الأبسط والأضمن في Streamlit:
+    st.image("logo.png", width=220) 
+
 # --- 6. عرض المحتوى ---
 
 # --- صفحة الرئيسية ---
+# --- صفحة الرئيسية ---
 if st.session_state.page == 'Home':
     st.markdown("<h4 style='color: #666;'>الرئيسية</h4>", unsafe_allow_html=True)
-    grid_col1, grid_col2 = st.columns(2)
-    with grid_col1:
+    
+    # التقسيم لعمودين عشان الأزرار تظهر 2 جنب بعض
+    col1, col2 = st.columns(2, gap="small")
+    
+    with col1:
         if st.button("🔍\nالبحث"):
             st.session_state.page = 'search'
             st.rerun()
         if st.button("➕\nإضافة عميل"):
             st.session_state.page = 'add_customer'
             st.rerun()
-    with grid_col2:
+            
+    with col2:
         if st.button("📋\nالمواعيد"):
             st.session_state.page = 'schedule'
             st.rerun()
@@ -77,12 +100,6 @@ if st.session_state.page == 'Home':
             st.session_state.page = 'add_maint'
             st.rerun()
 
-# --- صفحة البحث (تم تجميع الأجزاء المبعثرة هنا وضبط مسافاتها) ---
-elif st.session_state.page == 'search':
-    if st.button("🔙"): st.session_state.page = 'Home'; st.rerun()
-    st.header("🔍 بحث وإدارة العملاء")
-    df_customers = load_data(DATA_GID)
-    df_maint = load_data(MAINT_GID)
     
     if not df_customers.empty:
         search = st.text_input("ابحث بالاسم أو الرقم")
