@@ -124,7 +124,7 @@ elif st.session_state.page == 'search':
                     if "http" in str(row.get('اللوكيشن', '')): st.markdown(f"[📍 اللوكيشن]({row.get('اللوكيشن')})")
                 with col2:
                     st.write(f"📅 تاريخ التركيب: {row.get('تاريخ التركيب', '---')}")
-                    st.write(f"🔄 الدورة: كل {row.get('دورة الصيانة', '3')} شهور")
+                    st.write(f"🔄 دورة الصيانة: كل {row.get('دورة الصيانة', '3')} شهور")
 
                 st.markdown("---")
                 st.write("📜 سجل الصيانات:")
