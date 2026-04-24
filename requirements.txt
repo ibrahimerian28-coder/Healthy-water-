@@ -1,3 +1,4 @@
-fpdf2
-xlsxwriter
+streamlit
 pandas
+xlsxwriter
+fpdf2
