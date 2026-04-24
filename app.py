@@ -94,9 +94,7 @@ if st.session_state.page == 'Home':
         if st.button("🔧\nسجل صيانة"):
             st.session_state.page = 'add_maint'
             st.rerun()
-            
-
-                with c2:
+        with c2:
                     st.write(f"🔄 **دورة الصيانة:** كل {row.get('دورة الصيانة', '3')} شهور")
                     loc = row.get('اللوكيشن', '')
                     if pd.notna(loc) and "http" in str(loc):
