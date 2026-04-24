@@ -3,6 +3,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 import re
+import io
+from fpdf import FPDF
 
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="Healthy Water", layout="wide")
@@ -29,7 +31,46 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. بيانات الربط المباشر ---
+# --- 3. وظائف التصدير (Export Functions) ---
+
+# وظيفة Excel
+def to_excel(cust_row, maint_df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        pd.DataFrame([cust_row]).to_excel(writer, sheet_name='بيانات العميل', index=False)
+        if not maint_df.empty:
+            maint_df.to_excel(writer, sheet_name='سجل الصيانة', index=False)
+    return output.getvalue()
+
+# وظيفة PDF المبسطة مع اللوجو والفوتر
+def create_pdf(name, phone, area, maint_history):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # إضافة اللوجو (أعلى اليسار)
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 8, 33)
+    
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 20, f"Customer Report: {name}", ln=True, align='C')
+    
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(0, 10, f"Phone: {phone}", ln=True)
+    pdf.cell(0, 10, f"Area: {area}", ln=True)
+    pdf.cell(0, 10, "-"*50, ln=True)
+    
+    pdf.cell(0, 10, "Maintenance History Summary:", ln=True)
+    for index, row in maint_history.head(10).iterrows():
+        pdf.cell(0, 10, f"- Date: {row['تاريخ الزيارة']} | Cost: {row.get('التكلفه', 0)}", ln=True)
+
+    # الفوتر (أسفل الصفحة)
+    pdf.set_y(-30)
+    pdf.set_font("Arial", 'I', 10)
+    pdf.cell(0, 10, "Contact us: 01286609535 | WhatsApp & Call", align='C', ln=True)
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- 4. بيانات الربط المباشر ---
 SHEET_ID = "1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI"
 DATA_GID = "0"
 MAINT_GID = "2120582392"
@@ -44,16 +85,15 @@ def load_data(gid):
         return df
     except: return pd.DataFrame()
 
-# --- 4. إدارة الصفحات ---
+# --- 5. إدارة الصفحات ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 
-# --- 5. الهيدر ---
+# --- 6. الهيدر ---
 if os.path.exists("logo.png"):
     st.image("logo.png", width=220)
 
-# --- 6. عرض المحتوى ---
+# --- 7. عرض المحتوى ---
 
-# --- صفحة الرئيسية ---
 if st.session_state.page == 'Home':
     st.markdown("<h4 style='color: #666; text-align: center;'>الرئيسية</h4>", unsafe_allow_html=True)
     if st.button("🔍 البحث في العملاء"): st.session_state.page = 'search'; st.rerun()
@@ -61,7 +101,6 @@ if st.session_state.page == 'Home':
     if st.button("📋 جدول المواعيد"): st.session_state.page = 'schedule'; st.rerun()
     if st.button("🔧 تسجيل صيانة"): st.session_state.page = 'add_maint'; st.rerun()
 
-# --- صفحة البحث ---
 elif st.session_state.page == 'search':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
     df_customers = load_data(DATA_GID)
@@ -78,7 +117,7 @@ elif st.session_state.page == 'search':
                 c1, c2 = st.columns(2)
                 with c1:
                     raw_phones = str(row.get('الأرقام', ''))
-                    phones = re.split(r'[ ,/-]+', raw_phones) # تقسيم الأرقام لو فيها كذا رقم
+                    phones = re.split(r'[ ,/-]+', raw_phones)
                     st.write("**اتصال مباشر / واتساب:**")
                     for p in phones:
                         p = p.strip()
@@ -93,6 +132,7 @@ elif st.session_state.page == 'search':
                 # سجل الصيانة
                 st.markdown("---")
                 st.write("📜 **سجل الصيانات السابقة:**")
+                cust_maint = pd.DataFrame()
                 if not df_maint.empty:
                     cust_maint = df_maint[df_maint['الاسم'].astype(str).str.strip() == name].copy()
                     if not cust_maint.empty:
@@ -105,7 +145,16 @@ elif st.session_state.page == 'search':
                         cols = ['تاريخ الزيارة'] + shama3at + ['اخري', 'التكلفه', 'ملاحظات', 'تاريخ تذكير خاص']
                         st.table(cust_maint[[c for c in cols if c in cust_maint.columns]])
 
-# --- صفحة تسجيل عميل جديد (كاملة الخانات) ---
+                # --- زر Export المطلوب ---
+                st.markdown("### 📥 تصدير البيانات (Export)")
+                ex_col1, ex_col2 = st.columns(2)
+                with ex_col1:
+                    excel_file = to_excel(row.to_dict(), cust_maint)
+                    st.download_button(label="📊 تحميل Excel", data=excel_file, file_name=f"{name}.xlsx", mime="application/vnd.ms-excel")
+                with ex_col2:
+                    pdf_file = create_pdf(name, raw_phones, row.get('المنطقة', ''), cust_maint)
+                    st.download_button(label="📄 تحميل PDF", data=pdf_file, file_name=f"{name}.pdf", mime="application/pdf")
+
 elif st.session_state.page == 'add_customer':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
     st.header("➕ إضافة عميل")
@@ -123,7 +172,6 @@ elif st.session_state.page == 'add_customer':
         if st.form_submit_button("تجهيز البيانات"):
             st.code(f"{n_name} | {n_phone} | {n_area} | {n_addr} | {n_inst} | {n_cycle}")
 
-# --- صفحة تسجيل صيانة (كاملة الخانات) ---
 elif st.session_state.page == 'add_maint':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
     st.header("🔧 تسجيل صيانة")
