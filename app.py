@@ -102,7 +102,7 @@ if st.session_state.page == 'Home':
 
                 # --- عرض سجل الصيانات الكامل (الجدول الاحترافي) --
         st.markdown("### 📜 سجل الصيانات السابقة")
-                if not df_maint.empty and 'الاسم' in df_maint.columns:
+            if not df_maint.empty and 'الاسم' in df_maint.columns:
                     cust_maint = df_maint[df_maint['الاسم'].astype(str).str.strip() == name].copy()
                     if not cust_maint.empty:
                         cust_maint['تاريخ الزيارة'] = pd.to_datetime(cust_maint['تاريخ الزيارة'], errors='coerce')
