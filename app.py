@@ -54,45 +54,20 @@ if 'page' not in st.session_state: st.session_state.page = 'Home'
 
 # --- 5. الهيدر ---
 if os.path.exists("logo.png"):
-    # استخدام HTML لعرض الصورة بجودتها الأصلية مع تحديد عرض مناسب
-    st.markdown(
-        f"""
-        <div style="text-align: left;">
-            <img src="data:image/png;base64,{st.image_crop if 'image_crop' in locals() else ''}" 
-                 style="width: 180px; height: auto; image-rendering: -webkit-optimize-contrast;">
-        /* كود لإجبار الأعمدة تظهر جنب بعض حتى في الموبايل */
-[data-testid="column"] {
-    width: calc(50% - 1rem) !important;
-    flex: 1 1 calc(50% - 1rem) !important;
-    min-width: calc(50% - 1rem) !important;
-}
-
-        </div>
-        """, 
-        unsafe_allow_html=True
-    )
-    # الطريقة الأبسط والأضمن في Streamlit:
-    st.image("logo.png", width=220) 
+    st.image("logo.png", width=200)
 
 # --- 6. عرض المحتوى ---
-
-# --- صفحة الرئيسية ---
-# --- صفحة الرئيسية ---
 if st.session_state.page == 'Home':
     st.markdown("<h4 style='color: #666;'>الرئيسية</h4>", unsafe_allow_html=True)
-    
-    # التقسيم لعمودين عشان الأزرار تظهر 2 جنب بعض
-    col1, col2 = st.columns(2, gap="small")
-    
-    with col1:
+    grid_col1, grid_col2 = st.columns(2)
+    with grid_col1:
         if st.button("🔍\nالبحث"):
             st.session_state.page = 'search'
             st.rerun()
         if st.button("➕\nإضافة عميل"):
             st.session_state.page = 'add_customer'
             st.rerun()
-            
-    with col2:
+    with grid_col2:
         if st.button("📋\nالمواعيد"):
             st.session_state.page = 'schedule'
             st.rerun()
@@ -100,12 +75,15 @@ if st.session_state.page == 'Home':
             st.session_state.page = 'add_maint'
             st.rerun()
 
-    
+elif st.session_state.page == 'search':
+    if st.button("🔙"): st.session_state.page = 'Home'; st.rerun()
+    st.header("🔍 بحث وإدارة العملاء")
+    df_customers = load_data(DATA_GID)
+    df_maint = load_data(MAINT_GID)
     if not df_customers.empty:
         search = st.text_input("ابحث بالاسم أو الرقم")
         if search:
             df_customers = df_customers[df_customers.apply(lambda row: search.lower() in str(row.values).lower(), axis=1)]
-        
         for _, row in df_customers.iterrows():
             name = str(row.get('الاسم', '---')).strip()
             with st.expander(f"👤 {name}"):
@@ -117,7 +95,7 @@ if st.session_state.page == 'Home':
                     st.write(f"🔄 **دورة الصيانة:** كل {row.get('دورة الصيانة', '3')} شهور")
                     loc = row.get('اللوكيشن', '')
                     if pd.notna(loc) and "http" in str(loc):
-                        st.markdown(f"[📍 اللوكيشن]({loc})")
+                        st.markdown(f"[📍 افتح اللوكيشن]({loc})")
 
                 st.markdown("### 📜 سجل الصيانات السابقة")
                 if not df_maint.empty:
@@ -129,14 +107,10 @@ if st.session_state.page == 'Home':
                         for col in shama3at:
                             if col in cust_maint.columns:
                                 cust_maint[col] = cust_maint[col].apply(lambda x: "✅" if str(x).strip() == "تم" else "❌")
-                        
                         cols = ['تاريخ الزيارة'] + shama3at + ['اخري', 'التكلفه', 'ملاحظات', 'تاريخ تذكير خاص']
                         available = [c for c in cols if c in cust_maint.columns]
                         st.table(cust_maint[available])
-                    else:
-                        st.warning("لا توجد زيارات مسجلة.")
 
-# --- صفحة تسجيل عميل جديد ---
 elif st.session_state.page == 'add_customer':
     if st.button("🔙"): st.session_state.page = 'Home'; st.rerun()
     st.header("➕ تسجيل عميل جديد")
@@ -155,7 +129,6 @@ elif st.session_state.page == 'add_customer':
             res = [n_name, n_phone, n_addr, n_area, n_loc, n_inst.strftime('%Y-%m-%d'), n_cycle]
             st.code(" | ".join(map(str, res)))
 
-# --- صفحة إضافة سجل صيانة ---
 elif st.session_state.page == 'add_maint':
     if st.button("🔙"): st.session_state.page = 'Home'; st.rerun()
     st.header("🔧 إضافة سجل صيانة")
@@ -173,4 +146,4 @@ elif st.session_state.page == 'add_maint':
             m_notes = st.text_area("ملاحظات")
             m_special = st.text_input("تاريخ تذكير خاص")
             if st.form_submit_button("تجهيز الزيارة"):
-                st.success("جاهز للنسخ")
+                st.success("تم التجهيز")
