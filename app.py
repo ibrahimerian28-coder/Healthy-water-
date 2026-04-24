@@ -94,7 +94,7 @@ elif st.session_state.page == 'search':
     df_maint = load_data(MAINT_GID)
     
     if not df_customers.empty:
-        search = st.text_input("ابحث بالاسم أو الرقم أو الموبايل")
+        search = st.text_input("ابحث بالاسم أو رقم الموبايل")
         if search:
             df_customers = df_customers[df_customers.apply(lambda row: search.lower() in str(row.values).lower(), axis=1)]
         
