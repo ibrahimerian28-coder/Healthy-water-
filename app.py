@@ -3,119 +3,101 @@ import pandas as pd
 from datetime import datetime, timedelta
 import os
 
-# --- 1. الإعدادات الأساسية ---
-st.set_page_config(page_title="Healthy Water", layout="wide", page_icon="💧")
+# --- 1. إعدادات الصفحة ---
+st.set_page_config(page_title="Healthy Water", layout="wide")
 
-# كود CSS لتنسيق الأزرار واللوجو والواجهة
+# --- 2. كود التنسيق الاحترافي (CSS) ---
 st.markdown("""
     <style>
     /* إخفاء القوائم الافتراضية */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    #MainMenu, footer, header {visibility: hidden;}
+    [data-testid="stSidebar"] {display: none;}
     
-    /* تنسيق الحاوية الرئيسية */
-    .main {
-        background-color: #ffffff;
+    /* خلفية بيضاء نظيفة */
+    .stApp {
+        background-color: #fcfcfc;
     }
 
-    /* تنسيق اللوجو في أقصى اليسار */
-    .logo-container {
-        position: absolute;
-        top: -50px;
-        left: -20px;
-        z-index: 100;
+    /* محاذاة اللوجو في أقصى اليسار */
+    .header-container {
+        display: flex;
+        justify-content: flex-start;
+        padding: 10px;
     }
 
-    /* تنسيق الأزرار لتكون كبيرة وفي المنتصف */
+    /* تنسيق الأزرار لتكون مربعة (Grid) ومحاذاة لليسار */
     div.stButton > button {
-        width: 100%;
-        height: 80px;
-        font-size: 24px !important;
-        font-weight: bold;
-        color: #004a99;
+        width: 160px;
+        height: 140px;
         background-color: #ffffff;
-        border: 2px solid #004a99;
-        border-radius: 15px;
-        margin-bottom: 20px;
+        color: #004a99;
+        border: 1px solid #e0e0e0;
+        border-radius: 20px;
+        box-shadow: 0px 4px 6px rgba(0,0,0,0.05);
+        font-size: 18px !important;
+        font-weight: bold;
         transition: 0.3s;
+        margin-bottom: 10px;
     }
     
     div.stButton > button:hover {
-        background-color: #004a99;
-        color: #ffffff;
-        border: 2px solid #004a99;
+        border: 1px solid #004a99;
+        box-shadow: 0px 6px 12px rgba(0,74,153,0.15);
+        transform: translateY(-2px);
     }
-
-    /* إخفاء النقطة الحمراء بتاعة الراديو */
-    [data-testid="stSidebar"] {display: none;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. إدارة الحالة (Navigation) ---
+# --- 3. الهيدر (اللوجو) ---
+col_l, _ = st.columns([1, 4])
+with col_l:
+    if os.path.exists("logo.png"):
+        st.image("logo.png", width=140)
+    else:
+        st.write("### Healthy Water")
+
+# --- 4. إدارة الصفحات ---
 if 'page' not in st.session_state:
     st.session_state.page = 'Home'
 
-# وظيفة لتغيير الصفحة
-def move_to(page_name):
-    st.session_state.page = page_name
-
-# --- 3. عرض اللوجو (أقصى اليسار) ---
-st.markdown('<div class="logo-container">', unsafe_allow_html=True)
-if os.path.exists("logo.png"):
-    st.image("logo.png", width=180)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# --- 4. محتوى الصفحات ---
-
-# صفحة Home (الأزرار الكبيرة)
+# --- 5. الصفحة الرئيسية (Home) ---
 if st.session_state.page == 'Home':
-    st.write("<br><br><br>", unsafe_allow_html=True) # مسافة للأسفل
+    st.markdown("<h4 style='color: #666; margin-left: 10px;'>الرئيسية</h4>", unsafe_allow_html=True)
     
-    # توزيع الأزرار في المنتصف
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # توزيع الأزرار في مربعات جنب بعضها محاذية لليسار
+    col1, col2, _ = st.columns([1, 1, 2.5]) # جعل الأعمدة ضيقة ومحاذية لليسار
     
+    with col1:
+        if st.button("🔍\n\nالبحث"):
+            st.session_state.page = 'search'
+            st.rerun()
+        if st.button("➕\n\nإضافة عميل"):
+            st.session_state.page = 'add_customer'
+            st.rerun()
+            
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #004a99;'>القائمة الرئيسية</h1><br>", unsafe_allow_html=True)
-        
-        if st.button("🔍 بحث وإدارة العملاء"):
-            move_to('search')
+        if st.button("📋\n\nالمواعيد"):
+            st.session_state.page = 'schedule'
             st.rerun()
-            
-        if st.button("📋 جدول صيانة الأسبوع"):
-            move_to('schedule')
-            st.rerun()
-            
-        if st.button("➕ تسجيل عميل جديد"):
-            move_to('add_customer')
-            st.rerun()
-            
-        if st.button("🔧 إضافة سجل صيانة"):
-            move_to('add_maint')
+        if st.button("🔧\n\nسجل صيانة"):
+            st.session_state.page = 'add_maint'
             st.rerun()
 
-# صفحة البحث (تظهر فقط بعد الضغط على الزر)
-elif st.session_state.page == 'search':
-    if st.button("⬅️ العودة للرئيسية"):
-        move_to('Home')
-        st.rerun()
-    st.header("🔍 بحث وإدارة العملاء")
-    # هنا يوضع كود البحث اللي عملناه قبل كدة...
-
-elif st.session_state.page == 'schedule':
-    if st.button("⬅️ العودة للرئيسية"):
-        move_to('Home')
-        st.rerun()
-    st.header("📋 جدول صيانة الأسبوع")
-
-elif st.session_state.page == 'add_customer':
-    if st.button("⬅️ العودة للرئيسية"):
-        move_to('Home')
-        st.rerun()
-    st.header("➕ تسجيل عميل جديد")
-
-elif st.session_state.page == 'add_maint':
-    if st.button("⬅️ العودة للرئيسية"):
-        move_to('Home')
-        st.rerun()
-    st.header("🔧 إضافة سجل صيانة")
+# --- 6. الصفحات الداخلية ---
+else:
+    # زرار رجوع شيك ومحاذاة لليسار
+    col_back, _ = st.columns([1, 10])
+    with col_back:
+        if st.button("🔙"):
+            st.session_state.page = 'Home'
+            st.rerun()
+    
+    # هنا يوضع الكود الخاص بكل صفحة (نفس الأكواد السابقة للبحث والإضافة)
+    if st.session_state.page == 'search':
+        st.subheader("🔍 بحث وإدارة العملاء")
+    elif st.session_state.page == 'add_customer':
+        st.subheader("➕ تسجيل عميل جديد")
+    elif st.session_state.page == 'schedule':
+        st.subheader("📋 جدول صيانة الأسبوع")
+    elif st.session_state.page == 'add_maint':
+        st.subheader("🔧 إضافة سجل صيانة")
