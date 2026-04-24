@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import re
 import io
@@ -15,97 +15,70 @@ st.markdown("""
     #MainMenu, footer, header {visibility: hidden;}
     [data-testid="stSidebar"] {display: none;}
     .stApp {background-color: #ffffff;}
-    
-    /* تنسيق الأزرار المستطيلة الواضحة */
     div.stButton > button {
         width: 100%;
-        height: 65px !important;
+        height: 60px !important;
         background-color: #ffffff;
         color: #004a99;
         border: 2px solid #004a99;
         border-radius: 10px;
         font-size: 18px !important;
         font-weight: bold;
-        margin-bottom: 5px;
     }
-    div.stButton > button:hover {background-color: #f0f7ff;}
+    .stTable {background-color: white; border-radius: 10px;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. وظائف التصدير (Export) ---
-
-def to_excel(cust_row, maint_df):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        pd.DataFrame([cust_row]).to_excel(writer, sheet_name='Customer_Info', index=False)
-        if not maint_df.empty:
-            maint_df.to_excel(writer, sheet_name='Maint_History', index=False)
-    return output.getvalue()
-
-def create_pdf(name, phones, area, maint_history):
-    pdf = FPDF()
-    pdf.add_page()
-    
-    # اللوجو أعلى اليسار (لو الملف موجود)
-    if os.path.exists("logo.png"):
-        pdf.image("logo.png", 10, 8, 30)
-    
-    pdf.set_font("Arial", 'B', 16)
-    pdf.ln(20)
-    pdf.cell(0, 10, f"Customer: {name}", ln=True, align='C')
-    
-    pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Phones: {phones}", ln=True)
-    pdf.cell(0, 10, f"Area: {area}", ln=True)
-    pdf.ln(5)
-    pdf.cell(0, 0, "", "T", ln=True) # خط فاصـل
-    
-    pdf.ln(5)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, "Last Maintenance Records:", ln=True)
-    
-    pdf.set_font("Arial", '', 10)
-    if not maint_history.empty:
-        for _, r in maint_history.head(15).iterrows():
-            date_str = str(r.get('تاريخ الزيارة', ''))[:10]
-            cost = r.get('التكلفه', 0)
-            pdf.cell(0, 8, f"- {date_str} | Cost: {cost} EGP", ln=True)
-
-    # الفوتر الثابت
-    pdf.set_y(-25)
-    pdf.set_font("Arial", 'B', 11)
-    pdf.cell(0, 10, "Contact: 01286609535 | WhatsApp & Call", align='C', ln=True)
-    
-    return pdf.output()
-
-# --- 4. جلب البيانات ---
+# --- 3. جلب البيانات (مع معالجة اختفاء البيانات) ---
 SHEET_ID = "1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI"
 DATA_GID = "0"
 MAINT_GID = "2120582392"
 
 def load_data(gid):
-    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}"
+    # إضافة طابع زمني للرابط لإجبار جوجل على تحديث البيانات
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid={gid}&t={datetime.now().timestamp()}"
     try:
-        df = pd.read_csv(f"{url}&cache={datetime.now().timestamp()}")
+        df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
         if 'التكلفه' in df.columns:
             df['التكلفه'] = pd.to_numeric(df['التكلفه'], errors='coerce').fillna(0).astype(int)
         return df
-    except: return pd.DataFrame()
+    except Exception as e:
+        st.error(f"خطأ في جلب البيانات: {e}")
+        return pd.DataFrame()
 
-# --- 5. الهيدر (اللوجو) ---
+# --- 4. وظائف التصدير (PDF & Excel) ---
+def create_pdf_report(name_str, phone_str):
+    pdf = FPDF()
+    pdf.add_page()
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", 10, 8, 30)
+    pdf.set_font("Arial", 'B', 16)
+    pdf.ln(20)
+    pdf.cell(0, 10, "Maintenance Report", ln=True, align='C')
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(0, 10, f"Customer: {phone_str}", ln=True) # استخدمنا الرقم لتفادي خطأ اللغة العربية
+    pdf.ln(10)
+    pdf.set_y(-30)
+    pdf.cell(0, 10, "Contact: 01286609535 | WhatsApp & Call", align='C')
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- 5. الهيدر ---
 if os.path.exists("logo.png"):
-    st.image("logo.png", width=180) # حجم يمنع البكسلة
+    st.image("logo.png", width=180)
 
-# --- 6. الصفحات ---
+# --- 6. إدارة الصفحات ---
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 
+# --- الصفحة الرئيسية ---
 if st.session_state.page == 'Home':
-    st.markdown("<h4 style='color: #666; text-align: center;'>الرئيسية</h4>", unsafe_allow_html=True)
-    if st.button("🔍 البحث"): st.session_state.page = 'search'; st.rerun()
-    if st.button("➕ إضافة عميل"): st.session_state.page = 'add_customer'; st.rerun()
+    st.markdown("<h3 style='text-align: center;'>الرئيسية</h3>", unsafe_allow_html=True)
+    if st.button("🔍 البحث في العملاء"): st.session_state.page = 'search'; st.rerun()
+    if st.button("➕ إضافة عميل جديد"): st.session_state.page = 'add_customer'; st.rerun()
+    if st.button("📋 جدول المواعيد"): st.session_state.page = 'schedule'; st.rerun()
     if st.button("🔧 تسجيل صيانة"): st.session_state.page = 'add_maint'; st.rerun()
 
+# --- صفحة البحث والبيانات ---
 elif st.session_state.page == 'search':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
     df_customers = load_data(DATA_GID)
@@ -118,59 +91,77 @@ elif st.session_state.page == 'search':
         
         for _, row in df_customers.iterrows():
             name = str(row.get('الاسم', '---')).strip()
-            with st.expander(f"👤 {name} | {row.get('المنطقة', '')}"):
-                # عرض الأرقام والاتصال
-                raw_phones = str(row.get('الأرقام', ''))
-                phones_list = re.split(r'[ ,/-]+', raw_phones)
-                for p in phones_list:
-                    p = p.strip()
-                    if len(p) > 5:
-                        st.markdown(f'📞 <a href="tel:{p}">{p}</a> | <a href="https://wa.me/{p}">💬 WhatsApp</a>', unsafe_allow_html=True)
-                
-                st.write(f"🏠 العنوان: {row.get('العنوان', '---')}")
-                
-                # عرض سجل الصيانة
+            with st.expander(f"👤 {name} | 📍 {row.get('المنطقة', '---')}"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    phones = re.split(r'[ ,/-]+', str(row.get('الأرقام', '')))
+                    for p in phones:
+                        if len(p.strip()) > 5:
+                            st.markdown(f'📞 <a href="tel:{p}">اتصال {p}</a> | <a href="https://wa.me/{p}">💬 واتساب</a>', unsafe_allow_html=True)
+                    st.write(f"🏠 العنوان: {row.get('العنوان', '---')}")
+                with c2:
+                    st.write(f"🔄 الدورة: {row.get('دورة الصيانة', '3')} شهور")
+                    loc = row.get('اللوكيشن', '')
+                    if "http" in str(loc): st.markdown(f"[📍 اللوكيشن]({loc})")
+
+                # سجل الصيانة للعميل
                 st.markdown("---")
-                cust_maint = pd.DataFrame()
                 if not df_maint.empty:
-                    cust_maint = df_maint[df_maint['الاسم'].astype(str).str.strip() == name].copy()
-                    if not cust_maint.empty:
+                    cust_m = df_maint[df_maint['الاسم'].astype(str).str.strip() == name].copy()
+                    if not cust_m.empty:
                         st.write("📜 الصيانات السابقة:")
-                        st.table(cust_maint.head(5))
+                        st.table(cust_m.head(10))
+                
+                # أزرار التصدير
+                st.write("📥 تصدير التقرير:")
+                col_ex1, col_ex2 = st.columns(2)
+                with col_ex1:
+                    st.download_button("📄 PDF (Basic)", create_pdf_report(name, str(row.get('الأرقام', ''))), f"{name}.pdf", key=f"pdf_{name}")
+                with col_ex2:
+                    st.button("📊 Excel (قريباً)", key=f"ex_{name}")
 
-                # --- منطقة الـ Export ---
-                st.write("📥 استخراج تقرير:")
-                ex_c1, ex_c2 = st.columns(2)
-                with ex_c1:
-                    exc_file = to_excel(row.to_dict(), cust_maint)
-                    st.download_button("📊 Excel", exc_file, f"{name}.xlsx", key=f"ex_{name}")
-                with ex_c2:
-                    pdf_file = create_pdf(name, raw_phones, row.get('المنطقة', ''), cust_maint)
-                    st.download_button("📄 PDF", pdf_file, f"{name}.pdf", key=f"pdf_{name}")
+# --- صفحة المواعيد (التي كانت مختفية) ---
+elif st.session_state.page == 'schedule':
+    if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
+    st.header("📋 مواعيد الصيانة القادمة")
+    df_customers = load_data(DATA_GID)
+    if not df_customers.empty:
+        st.write("سيتم عرض المواعيد بناءً على تاريخ التركيب ودورة الصيانة هنا.")
+        st.dataframe(df_customers[['الاسم', 'المنطقة', 'تاريخ التركيب', 'دورة الصيانة']])
 
-# (صفحات إضافة عميل وصيانة تظل كما هي بكل خاناتها)
-elif st.session_state.page == 'add_customer':
-    if st.button("🔙"): st.session_state.page = 'Home'; st.rerun()
-    with st.form("add"):
-        n1, n2 = st.columns(2)
-        name_in = n1.text_input("الاسم")
-        phone_in = n1.text_input("الأرقام")
-        area_in = n1.text_input("المنطقة")
-        addr_in = n2.text_area("العنوان")
-        inst_in = n2.date_input("التركيب")
-        cycl_in = n2.number_input("الدورة", 3)
-        loc_in = st.text_input("اللوكيشن")
-        if st.form_submit_button("تجهيز"): st.success("جاهز")
-
+# --- صفحة تسجيل صيانة (الخانات الكاملة) ---
 elif st.session_state.page == 'add_maint':
-    if st.button("🔙"): st.session_state.page = 'Home'; st.rerun()
+    if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
+    st.header("🔧 تسجيل صيانة جديدة")
     df_c = load_data(DATA_GID)
-    with st.form("maint"):
-        m_name = st.selectbox("الاسم", df_c['الاسم'].tolist()) if not df_c.empty else st.text_input("الاسم")
-        m_date = st.date_input("التاريخ")
+    with st.form("maint_form"):
+        m_name = st.selectbox("اختر العميل", df_c['الاسم'].tolist()) if not df_c.empty else st.text_input("اسم العميل")
+        m_date = st.date_input("تاريخ الزيارة")
         c1, c2, c3 = st.columns(3)
-        p1, p2, p3 = c1.checkbox("P1"), c1.checkbox("P2"), c1.checkbox("P3")
-        mem, post, calc = c2.checkbox("ممبرين"), c2.checkbox("بوست"), c2.checkbox("كالسيت")
-        infra = c3.checkbox("انفرا")
-        cost_in = st.number_input("التكلفة", step=1)
-        if st.form_submit_button("حفظ"): st.success("تم")
+        with c1: p1, p2, p3 = st.checkbox("P1"), st.checkbox("P2"), st.checkbox("P3")
+        with c2: mem, post, calc = st.checkbox("ممبرين"), st.checkbox("بوست"), st.checkbox("كالسيت")
+        with c3: infra = st.checkbox("انفرا ريد")
+        m_other = st.text_input("أخرى (قطع غيار إضافية)")
+        m_cost = st.number_input("التكلفة (أرقام صحيحة)", step=1)
+        m_notes = st.text_area("ملاحظات الفني")
+        m_special = st.text_input("تاريخ تذكير خاص (مثلاً: 2026-10-01)")
+        if st.form_submit_button("حفظ الزيارة"):
+            st.success("تم التجهيز للنسخ إلى شيت الإكسيل")
+
+# --- صفحة إضافة عميل جديد ---
+elif st.session_state.page == 'add_customer':
+    if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
+    st.header("➕ إضافة عميل جديد")
+    with st.form("add_cust"):
+        f1, f2 = st.columns(2)
+        with f1:
+            n_name = st.text_input("الاسم بالكامل")
+            n_phone = st.text_input("أرقام الهاتف")
+            n_area = st.text_input("المنطقة")
+        with f2:
+            n_addr = st.text_area("العنوان بالتفصيل")
+            n_inst = st.date_input("تاريخ التركيب")
+            n_cycle = st.number_input("دورة الصيانة (بالشهور)", value=3)
+        n_loc = st.text_input("رابط اللوكيشن (Google Maps)")
+        if st.form_submit_button("تجهيز بيانات العميل"):
+            st.code(f"{n_name} | {n_phone} | {n_area} | {n_addr} | {n_inst} | {n_cycle}")
