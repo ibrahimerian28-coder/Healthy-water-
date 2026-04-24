@@ -53,9 +53,9 @@ def load_data(gid):
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 
 # --- 5. الهيدر ---
-if os.path.exists("logo.png"):
-    st.image("logo.png", width=250)
-
+    if os.path.exists("logo.png"):
+        # عرض اللوجو بدون تحديد عرض قاسي لضمان الجودة
+        st.image("logo.png", use_container_width=False, width=250)
 # --- 6. عرض المحتوى ---
 
 # --- صفحة الرئيسية ---
