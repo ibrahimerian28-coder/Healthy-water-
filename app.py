@@ -74,39 +74,28 @@ if os.path.exists("logo.png"):
 
 # --- صفحة الرئيسية ---
 if st.session_state.page == 'Home':
-    st.markdown("<h2 style='color: #444; margin-bottom: 20px;'>الرئيسية</h2>", unsafe_allow_html=True)
+    st.markdown("<h4 style='color: #666;'>الرئيسية</h4>", unsafe_allow_html=True)
     
-    # تقسيم الشاشة لنصفين متساويين للأزرار
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔍\n\nالبحث"): st.session_state.page = 'search'; st.rerun()
-        if st.button("➕\n\nإضافة عميل"): st.session_state.page = 'add_customer'; st.rerun()
-    with col2:
-        if st.button("📋\n\nالمواعيد"): st.session_state.page = 'schedule'; st.rerun()
-        if st.button("🔧\n\nسجل صيانة"): st.session_state.page = 'add_maint'; st.rerun()
+    # استخدام حاوية مخصصة للأزرار لضمان ظهورها جنب بعض
+    grid_col1, grid_col2 = st.columns(2)
+    
+    with grid_col1:
+        if st.button("🔍\nالبحث"):
+            st.session_state.page = 'search'
+            st.rerun()
+        if st.button("➕\nإضافة عميل"):
+            st.session_state.page = 'add_customer'
+            st.rerun()
+            
+    with grid_col2:
+        if st.button("📋\nالمواعيد"):
+            st.session_state.page = 'schedule'
+            st.rerun()
+        if st.button("🔧\nسجل صيانة"):
+            st.session_state.page = 'add_maint'
+            st.rerun()
+            
 
-# --- صفحة البحث الشاملة (كل البيانات هنا) ---
-elif st.session_state.page == 'search':
-    if st.button("🔙 العودة للرئيسية"): st.session_state.page = 'Home'; st.rerun()
-    st.header("🔍 بحث وإدارة العملاء")
-    
-    df_customers = load_data(DATA_GID)
-    df_maint = load_data(MAINT_GID)
-    
-    if not df_customers.empty:
-        search = st.text_input("ابحث بالاسم أو رقم الموبايل")
-        if search:
-            df_customers = df_customers[df_customers.apply(lambda row: search.lower() in str(row.values).lower(), axis=1)]
-        
-        for _, row in df_customers.iterrows():
-            name = str(row.get('الاسم', '---')).strip()
-            with st.expander(f"👤 {name} | 📍 {row.get('المنطقة', '---')}"):
-                # عرض كافة بيانات العميل
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.write(f"📞 **الأرقام:** {row.get('الأرقام', '---')}")
-                    st.write(f"🏠 **العنوان:** {row.get('العنوان', '---')}")
-                    st.write(f"📅 **تاريخ التركيب:** {row.get('تاريخ التركيب', '---')}")
                 with c2:
                     st.write(f"🔄 **دورة الصيانة:** كل {row.get('دورة الصيانة', '3')} شهور")
                     loc = row.get('اللوكيشن', '')
