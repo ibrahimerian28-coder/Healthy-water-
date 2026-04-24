@@ -38,13 +38,12 @@ def load_data(gid):
         return df
     except: return pd.DataFrame()
 
-# --- 3. وظيفة الـ PDF المطورة (متوافقة مع الإنجليزية) ---
+# --- 3. وظيفة الـ PDF (متوافقة مع الإنجليزية) ---
 class PDF(FPDF):
     def header(self):
         if os.path.exists("logo.png"):
             self.image("logo.png", 10, 8, 45)
         self.set_font('Arial', 'B', 15)
-        self.cell(80); self.cell(30, 10, 'Maintenance Report', 0, 0, 'C')
         self.ln(25)
     def footer(self):
         self.set_y(-20)
@@ -56,9 +55,7 @@ def create_pdf_bytes(cust_row, maint_df):
     pdf = PDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 12)
-    
-    # دالة لتنظيف النص من أي حروف عربية تسبب Error في الـ PDF
-    def clean(t): return str(t).encode('ascii', 'ignore').decode('ascii') if t else ""
+    def clean(t): return str(t).encode('ascii', 'ignore').decode('ascii') if t else "N/A"
 
     pdf.cell(0, 10, f"Customer: {clean(cust_row.get('الاسم', ''))}", ln=True)
     pdf.set_font("Arial", '', 11)
@@ -72,28 +69,23 @@ def create_pdf_bytes(cust_row, maint_df):
     pdf.ln()
 
     pdf.set_font("Arial", '', 9)
-    # قائمة الأعمدة الجديدة بالإنجليزي
-    filter_cols = ['P1', 'P2', 'P3', 'membrane', 'post carbon', 'Calcite', 'infrared']
+    # القائمة المحدثة حسب الإنجليزية في الشيت
+    f_cols = ['P1', 'P2', 'P3', 'membrane', 'post carbon', 'Calcite', 'infrared']
     
     if not maint_df.empty:
         for _, m_row in maint_df.iterrows():
             d = str(m_row.get('تاريخ الزيارة', ''))[:10]
-            # قراءة التكلفة من العمود الجديد amount
             cost = str(m_row.get('amount', '0')).split('.')[0]
-            
-            # تجميع الشمعات اللي تم تغييرها
-            done = [f for f in filter_cols if str(m_row.get(f, '')).strip().lower() in ['تم', 'true', '1', 'checked']]
-            
+            done = [f for f in f_cols if str(m_row.get(f, '')).strip().lower() in ['تم', 'true', '1', 'checked']]
             pdf.cell(30, 8, d, 1)
-            pdf.cell(120, 8, ", ".join(done) if done else "General", 1)
+            pdf.cell(120, 8, ", ".join(done) if done else "Service", 1)
             pdf.cell(35, 8, cost, 1)
             pdf.ln()
-    
     return bytes(pdf.output())
 
 # --- 4. إدارة الصفحات ---
 if os.path.exists("logo.png"):
-    st.image("logo.png", width=220)
+    st.image("logo.png", width=200)
 
 if 'page' not in st.session_state: st.session_state.page = 'Home'
 
@@ -105,35 +97,35 @@ if st.session_state.page == 'Home':
     if st.button("🔧 تسجيل صيانة"): st.session_state.page = 'add_maint'; st.rerun()
     if st.button("📋 جدول المواعيد"): st.session_state.page = 'schedule'; st.rerun()
 
-# --- صفحة البحث ---
+# --- صفحة البحث وعرض البيانات كاملة ---
 elif st.session_state.page == 'search':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
     df_c = load_data(DATA_GID)
     df_m = load_data(MAINT_GID)
     query = st.text_input("ابحث بالاسم أو الرقم")
-    
     if not df_c.empty:
         if query:
             df_c = df_c[df_c.apply(lambda r: query.lower() in str(r.values).lower(), axis=1)]
-        
         for _, row in df_c.iterrows():
             c_name = str(row.get('الاسم', '---')).strip()
             with st.expander(f"👤 {c_name} | 📍 {row.get('المنطقة', '')}"):
                 col1, col2 = st.columns(2)
                 with col1:
+                    st.write(f"📞 الأرقام: {row.get('الأرقام', '---')}")
                     st.write(f"🏠 العنوان: {row.get('العنوان', '---')}")
+                    if "http" in str(row.get('اللوكيشن', '')): st.markdown(f"[📍 اللوكيشن]({row.get('اللوكيشن')})")
                 with col2:
+                    st.write(f"📅 تاريخ التركيب: {row.get('تاريخ التركيب', '---')}")
                     st.write(f"🔄 الدورة: كل {row.get('دورة الصيانة', '3')} شهور")
 
                 st.markdown("---")
                 st.write("📜 سجل الصيانات:")
                 this_m = df_m[df_m['الاسم'].astype(str).str.strip() == c_name].copy() if not df_m.empty else pd.DataFrame()
-                
                 if not this_m.empty:
                     disp_m = this_m.copy()
-                    # تحويل القيم لعلامة صح لكل الأعمدة (العربي والإنجليزي لضمان العمل)
-                    f_cols = ['P1','P2','P3','membrane','post carbon','Calcite','infrared','ممبرين','بوست كاربون']
-                    for f in f_cols:
+                    # تحويل علامة الصح للكل (عربي وإنجليزي لضمان الاستقرار)
+                    f_check = ['P1','P2','P3','membrane','post carbon','Calcite','infrared','ممبرين','بوست كاربون']
+                    for f in f_check:
                         if f in disp_m.columns:
                             disp_m[f] = disp_m[f].apply(lambda x: "✅" if str(x).strip().lower() in ['تم','true','1'] else "❌")
                     st.table(disp_m)
@@ -148,7 +140,7 @@ elif st.session_state.page == 'schedule':
     if not df_c.empty:
         st.dataframe(df_c)
 
-# --- تسجيل صيانة ---
+# --- تسجيل صيانة (الخانات كاملة) ---
 elif st.session_state.page == 'add_maint':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
     st.header("🔧 تسجيل صيانة")
@@ -158,24 +150,29 @@ elif st.session_state.page == 'add_maint':
         m_date = st.date_input("التاريخ", datetime.now())
         c1, c2, c3 = st.columns(3)
         p1, p2, p3 = c1.checkbox("P1"), c1.checkbox("P2"), c1.checkbox("P3")
-        # استخدام الأسماء الجديدة في العرض
-        mem = c2.checkbox("Membrane")
-        post = c2.checkbox("Post Carbon")
-        calc = c2.checkbox("Calcite")
+        mem, post, calc = c2.checkbox("Membrane"), c2.checkbox("Post Carbon"), c2.checkbox("Calcite")
         infra = c3.checkbox("Infrared")
         m_other = st.text_input("Other (أخرى)")
         m_cost = st.number_input("Amount (التكلفة)", step=1)
         m_notes = st.text_area("Notes (ملاحظات)")
         m_remind = st.text_input("Special reminder date")
-        if st.form_submit_button("حفظ"): st.success("تم")
+        if st.form_submit_button("حفظ"): st.success("جاهز للإرسال")
 
-# --- إضافة عميل ---
+# --- إضافة عميل جديد (الخانات كاملة 100%) ---
 elif st.session_state.page == 'add_customer':
     if st.button("🔙 رجوع"): st.session_state.page = 'Home'; st.rerun()
-    st.header("➕ إضافة عميل")
+    st.header("➕ إضافة عميل جديد")
     with st.form("a_form"):
-        n_name = st.text_input("الاسم")
-        n_phone = st.text_input("الأرقام")
-        n_area = st.text_input("المنطقة")
-        n_inst = st.date_input("تاريخ التركيب")
-        if st.form_submit_button("حفظ"): st.success("تم")
+        col_left, col_right = st.columns(2)
+        with col_left:
+            n_name = st.text_input("الاسم الثلاثي")
+            n_phone = st.text_input("الأرقام")
+            n_area = st.text_input("المنطقة")
+            n_loc = st.text_input("رابط اللوكيشن")
+        with col_right:
+            n_addr = st.text_area("العنوان بالتفصيل")
+            n_inst = st.date_input("تاريخ التركيب", datetime.now())
+            n_cycle = st.number_input("دورة الصيانة (شهور)", 3)
+        
+        if st.form_submit_button("حفظ بيانات العميل"):
+            st.success(f"تم تجهيز بيانات {n_name}")
