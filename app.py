@@ -24,7 +24,7 @@ def clean_text_for_pdf(text):
     if not text: return ""
     return "".join(i for i in str(text) if ord(i) < 128)
 
-# --- 2. نظام تسجيل الدخول (تم تصحيح البحث هنا) ---
+# --- 2. نظام تسجيل الدخول (تم تصحيح البحث الشامل هنا) ---
 if 'auth' not in st.session_state: st.session_state.auth = None
 if 'user_data' not in st.session_state: st.session_state.user_data = None
 
@@ -44,8 +44,8 @@ def login():
             df_c = load_all_data("0")
             search_val = str(u_id).strip()
             if not df_c.empty:
-                # تصحيح: البحث عن تطابق في رقم التليفون أو الـ ID بشكل نصي صريح
-                match = df_c[df_c['phone'].astype(str).str.contains(search_val, na=False)]
+                # تصحيح البحث: التأكد من تحويل العمود لنصوص والبحث عن التطابق بداخلها
+                match = df_c[df_c['phone'].astype(str).str.contains(re.escape(search_val), na=False)]
                 if not match.empty:
                     st.session_state.auth = "customer"
                     st.session_state.user_data = match.iloc[0]
@@ -154,6 +154,7 @@ if menu in ["بيانات العملاء", "بروفايلي"]:
                 st.write(f"**تاريخ التركيب:** {r.get('setup_date','')}")
                 st.write(f"**الدورة:** كل {r.get('cycle',3)} شهور")
                 
+                # تصحيح استخراج الأرقام المتعددة: استخراج كل ما يبدأ بـ 01 ويتبعه 9 أرقام مهما كان ما بينهم
                 phone_val = str(r.get('phone',''))
                 nums = re.findall(r'01\d{9}', phone_val) 
                 if nums:
@@ -166,7 +167,6 @@ if menu in ["بيانات العملاء", "بروفايلي"]:
                 history = df_m[df_m['name'] == r['name']].copy()
                 if not history.empty:
                     try:
-                        # تصحيح: استدعاء دالة الـ PDF وتمريرها لزر التحميل
                         pdf_output = generate_safe_pdf(r, history)
                         st.download_button(
                             label=f"📥 تحميل تقرير PDF ({r['name']})",
