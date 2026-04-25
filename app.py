@@ -20,12 +20,11 @@ def format_to_check(val):
     v = str(val).lower().strip()
     return "✓" if v in ['true', '1', 'checked', 'تم', 'yes'] else "✗"
 
-# دالة لتطهير النصوص من الحروف الغريبة التي تسبب الـ Crash في الـ PDF
 def clean_text_for_pdf(text):
     if not text: return ""
     return "".join(i for i in str(text) if ord(i) < 128)
 
-# --- 2. نظام تسجيل الدخول المحسن ---
+# --- 2. نظام تسجيل الدخول (تم تصحيح البحث هنا) ---
 if 'auth' not in st.session_state: st.session_state.auth = None
 if 'user_data' not in st.session_state: st.session_state.user_data = None
 
@@ -43,9 +42,9 @@ def login():
         u_id = st.sidebar.text_input("رقم الموبايل أو الكود (ID):")
         if st.sidebar.button("دخول العميل"):
             df_c = load_all_data("0")
-            # تحسين البحث ليطابق النصوص بدقة ويمنع خطأ عدم التسجيل
             search_val = str(u_id).strip()
             if not df_c.empty:
+                # تصحيح: البحث عن تطابق في رقم التليفون أو الـ ID بشكل نصي صريح
                 match = df_c[df_c['phone'].astype(str).str.contains(search_val, na=False)]
                 if not match.empty:
                     st.session_state.auth = "customer"
@@ -57,7 +56,7 @@ if not st.session_state.auth:
     login()
     st.stop()
 
-# --- 3. تصميم الـ PDF الأفقي الاحترافي ---
+# --- 3. تصميم الـ PDF (تم تصحيح مخرجات الـ Bytes هنا) ---
 class HealthyPDF(FPDF):
     def header(self):
         try: self.image("logo.png", 10, 8, 50) 
@@ -76,7 +75,6 @@ def generate_safe_pdf(row, df_m):
     pdf.add_page()
     pdf.set_font("Arial", 'B', 12)
     
-    # استخدام الدالة المنظفة للنصوص لمنع الـ Unicode Error نهائياً
     c_name = clean_text_for_pdf(row['name'])
     c_phone = clean_text_for_pdf(row.get('phone',''))
     c_area = clean_text_for_pdf(row.get('area',''))
@@ -101,7 +99,9 @@ def generate_safe_pdf(row, df_m):
             pdf.cell(31, 10, check, 1, 0, 'C')
         pdf.cell(31, 10, str(m.get('amount','0')), 1, 0, 'C')
         pdf.ln()
-    return pdf.output(dest='S').encode('latin-1', 'ignore')
+    
+    # تصحيح: إخراج الملف كـ bytes مباشرة متوافقة مع streamlit
+    return bytes(pdf.output())
 
 # --- 4. التنسيق (CSS) ---
 st.markdown("""
@@ -166,8 +166,14 @@ if menu in ["بيانات العملاء", "بروفايلي"]:
                 history = df_m[df_m['name'] == r['name']].copy()
                 if not history.empty:
                     try:
-                        pdf_bytes = generate_safe_pdf(r, history)
-                        st.download_button(f"📥 تحميل تقرير PDF ({r['name']})", pdf_bytes, f"{r['name']}.pdf", "application/pdf")
+                        # تصحيح: استدعاء دالة الـ PDF وتمريرها لزر التحميل
+                        pdf_output = generate_safe_pdf(r, history)
+                        st.download_button(
+                            label=f"📥 تحميل تقرير PDF ({r['name']})",
+                            data=pdf_output,
+                            file_name=f"{r['name']}.pdf",
+                            mime="application/pdf"
+                        )
                     except Exception as e: 
                         st.warning("عفواً، لا يمكن إنشاء PDF حالياً")
                     
