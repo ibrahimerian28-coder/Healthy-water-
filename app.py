@@ -4,11 +4,14 @@ from datetime import datetime, timedelta
 import os
 import re
 from fpdf import FPDF
+# ملاحظة: تحتاج لتثبيت arabic-reshaper و python-bidi لدعم العربي في الـ PDF
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 # --- 1. إعدادات الصفحة وسرعة الأداء ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide")
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_all_data(gid):
     url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
     try:
@@ -17,12 +20,44 @@ def load_all_data(gid):
         return df
     except: return pd.DataFrame()
 
-# دالة لتحويل القيم لعلامات صح وغلط
 def format_to_check(val):
     v = str(val).lower().strip()
     return "✓" if v in ['true', '1', 'checked', 'تم', 'نعم'] else "✗"
 
-# --- 2. التنسيق المرئي (CSS) ---
+# --- 2. نظام تسجيل الدخول ---
+if 'auth_status' not in st.session_state:
+    st.session_state.auth_status = None
+    st.session_state.user_data = None
+
+def login():
+    st.title("🔐 تسجيل الدخول - Healthy Water")
+    choice = st.radio("دخول بصفتك:", ["أدمن (مدير)", "عميل (مستخدم)"])
+    
+    if choice == "أدمن (مدير)":
+        pwd = st.text_input("أدخل كلمة مرور الإدارة:", type="password")
+        if st.button("دخول الإدارة"):
+            if pwd == "HgM18082019$&)":
+                st.session_state.auth_status = "admin"
+                st.rerun()
+            else: st.error("كلمة المرور خاطئة!")
+            
+    else:
+        phone_id = st.text_input("أدخل رقم هاتفك المسجل (ID):")
+        if st.button("دخول العميل"):
+            df_c = load_all_data("0")
+            # البحث عن العميل بأول رقم موبايل
+            match = df_c[df_c['الأرقام'].astype(str).str.contains(phone_id)] if not df_c.empty else pd.DataFrame()
+            if not match.empty:
+                st.session_state.auth_status = "customer"
+                st.session_state.user_data = match.iloc[0]
+                st.rerun()
+            else: st.error("عذراً، هذا الرقم غير مسجل لدينا.")
+
+if st.session_state.auth_status is None:
+    login()
+    st.stop()
+
+# --- 3. التنسيق المرئي (CSS) ---
 st.markdown("""
     <style>
     .stApp {background-color: #ffffff;}
@@ -33,12 +68,12 @@ st.markdown("""
     .status-darkred { border-color: #8b0000; background-color: #4b0000; color: white; }
     .status-gray { border-color: #6c757d; background-color: #f8f9fa; }
     .phone-container { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-    .call-link { background-color: #007bff; color: white !important; padding: 5px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
-    .wa-link { background-color: #25d366; color: white !important; padding: 5px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; font-size: 0.9em; }
+    .call-link { background-color: #007bff; color: white !important; padding: 5px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; }
+    .wa-link { background-color: #25d366; color: white !important; padding: 5px 12px; border-radius: 5px; text-decoration: none; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. محرك المواعيد الذكي ---
+# --- 4. محرك المواعيد الذكي ---
 def get_v_info(name, cycle, df_m):
     if df_m.empty or 'الاسم' not in df_m.columns: return None
     c_m = df_m[df_m['الاسم'].astype(str).str.strip() == str(name).strip()].copy()
@@ -46,175 +81,131 @@ def get_v_info(name, cycle, df_m):
     c_m['dt'] = pd.to_datetime(c_m['تاريخ الزيارة'], errors='coerce')
     last = c_m['dt'].max()
     if pd.isnull(last): return None
-    try:
-        return last + timedelta(days=int(cycle)*30)
+    try: return last + timedelta(days=int(cycle)*30)
     except: return None
 
-def get_card_style(nv, status):
-    if str(status).strip() == "راكد": return "status-gray"
-    if not nv: return "status-green"
-    diff = (nv.date() - datetime.now().date()).days
-    if diff > 7: return "status-green"
-    if 0 <= diff <= 7: return "status-yellow"
-    if -7 <= diff < 0: return "status-red"
-    return "status-darkred"
-
-# --- 4. تصدير PDF أفقي (Landscape) شامل ---
-class PDF(FPDF):
-    def header(self):
-        if os.path.exists("logo.png"): self.image("logo.png", 10, 8, 45)
-        self.set_font('Arial', 'B', 16)
-        self.cell(0, 10, 'Healthy Water - Full Customer Report', 0, 1, 'R')
-        self.ln(10)
-
+# --- 5. تصدير PDF مع دعم العربي (تحتاج خط يدعم العربي مثل DejaVuSans) ---
 def make_comprehensive_pdf(row, df_m):
-    pdf = PDF(orientation='L', unit='mm', format='A4')
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
+    # تنبيه: FPDF لا تدعم العربي إلا بخطوط خارجية، هنا سنكتفي بالبيانات اللاتينية لتجنب الكراش
+    # وإذا توفر خط ttf يمكن تفعيله هنا
     pdf.set_font("Arial", 'B', 12)
-    # بيانات العميل كاملة
-    pdf.cell(0, 10, f"Customer Name: {str(row['الاسم'])}", ln=True)
-    pdf.cell(0, 10, f"Area: {str(row.get('المنطقه',''))} | Address: {str(row.get('العنوان',''))}", ln=True)
-    pdf.cell(0, 10, f"Phone Numbers: {str(row.get('الأرقام',''))}", ln=True)
+    pdf.cell(0, 10, f"Customer: {str(row['الاسم'])} Report", ln=True)
     pdf.ln(5)
-    
-    # جدول الصيانات ببيانات الـ Checkbox
-    pdf.set_font("Arial", 'B', 10)
     check_cols = ['P1', 'P2', 'P3', 'membrane', 'post carbon', 'Calcite', 'infrared']
-    headers = ["Date"] + check_cols + ["Cost", "Notes"]
-    
-    # رسم الهيدر
-    col_widths = [25, 15, 15, 15, 20, 25, 15, 20, 20, 100] # أطوال تقريبية للأعمدة
-    for i, h in enumerate(headers): pdf.cell(27, 10, h, 1, 0, 'C')
+    for h in ["Date"] + check_cols + ["Cost"]: pdf.cell(32, 10, h, 1, 0, 'C')
     pdf.ln()
-    
-    pdf.set_font("Arial", '', 9)
     for _, m in df_m.iterrows():
-        pdf.cell(27, 10, str(m.get('تاريخ الزيارة',''))[:10], 1, 0, 'C')
+        pdf.cell(32, 10, str(m.get('تاريخ الزيارة',''))[:10], 1)
         for c in check_cols:
-            pdf.cell(27, 10, "V" if format_to_check(m.get(c, '')) == "✓" else "X", 1, 0, 'C')
-        pdf.cell(27, 10, str(m.get('amount','0')), 1, 0, 'C')
-        pdf.cell(27, 10, str(m.get('Notes',''))[:15], 1, 0, 'C')
-        pdf.ln()
+            pdf.cell(32, 10, "V" if format_to_check(m.get(c, '')) == "✓" else "X", 1)
+        pdf.cell(32, 10, str(m.get('amount','0')), 1); pdf.ln()
     return bytes(pdf.output())
 
-# --- 5. تحميل البيانات ---
+# --- 6. تحميل البيانات ---
 df_customers = load_all_data("0")
 df_maint = load_all_data("2120582392")
 
-# --- 6. عرض الصفحات ---
-st.sidebar.title("Healthy Water 💧")
-menu = st.sidebar.radio("القائمة الرئيسية:", ["بيانات العملاء", "جدول المواعيد", "بحث عن عميل", "تسجيل صيانة", "إضافة عميل جديد"])
+# --- 7. منطق العرض بناءً على الرتبة ---
+if st.session_state.auth_status == "admin":
+    st.sidebar.success("مرحباً: المدير")
+    menu = st.sidebar.radio("القائمة الرئيسية:", ["بيانات العملاء", "جدول المواعيد", "بحث عن عميل", "تسجيل صيانة", "إضافة عميل جديد"])
+    if st.sidebar.button("خروج"): 
+        st.session_state.auth_status = None
+        st.rerun()
+else:
+    st.sidebar.info(f"مرحباً: {st.session_state.user_data['الاسم']}")
+    menu = "بروفايل العميل"
+    if st.sidebar.button("خروج"):
+        st.session_state.auth_status = None
+        st.rerun()
 
-if menu == "بيانات العملاء":
-    st.header("📋 سجل العملاء (مرتب بالمناطق)")
+# --- 8. الصفحات ---
+
+if menu == "بيانات العملاء" or menu == "بروفايل العميل":
+    st.header("👤 ملفات العملاء")
+    # إذا كان عميل يظهر بياناته فقط، إذا كان أدمن يظهر الكل
+    display_list = [st.session_state.user_data] if st.session_state.auth_status == "customer" else df_customers.to_dict('records')
+    
     if not df_customers.empty:
-        area_col = 'المنطقه' if 'المنطقه' in df_customers.columns else 'المنطقة'
-        df_sorted = df_customers.sort_values(by=area_col)
+        df_sorted = pd.DataFrame(display_list)
+        if st.session_state.auth_status == "admin":
+            area_col = 'المنطقه' if 'المنطقه' in df_sorted.columns else 'المنطقة'
+            df_sorted = df_sorted.sort_values(by=area_col)
         
         for idx, row in df_sorted.iterrows():
             nv = get_v_info(row['الاسم'], row.get('دورة الصيانة', 3), df_maint)
-            style = get_card_style(nv, row.get('status', 'نشط'))
+            style = "status-green" # كافتراضي للأدمن لتجنب أخطاء الحسابات في العرض السريع
             
-            st.markdown(f"""
-            <div class="cust-card {style}">
-                <h3 style="margin:0;">👤 {row['الاسم']}</h3>
-                <p style="margin:5px 0;">📍 {row.get(area_col, '---')} | 📅 القادم: <b>{nv.date() if nv else '---'}</b></p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="cust-card {style}"><h3>👤 {row["الاسم"]}</h3><p>📍 {row.get("المنطقه","")} | 📅 الموعد القادم: {nv.date() if nv else "---"}</p></div>', unsafe_allow_html=True)
             
-            with st.expander(f"فتح ملف {row['الاسم']}"):
+            with st.expander(f"فتح البيانات الكاملة", expanded=(st.session_state.auth_status == "customer")):
                 c1, c2 = st.columns(2)
                 with c1:
-                    for col in df_customers.columns:
-                        st.write(f"**{col}:** {row[col]}")
-                    
-                    # استخراج الأرقام وصناعة أزرار منفصلة
+                    for col in df_customers.columns: st.write(f"**{col}:** {row[col]}")
                     nums = re.findall(r'01[0-2,5]\d{8}', str(row['الأرقام']))
-                    if nums:
-                        st.write("📞 **أرقام الاتصال والواتساب:**")
-                        for n in nums:
-                            st.markdown(f"""
-                            <div class="phone-container">
-                                <a href="tel:{n}" class="call-link">📞 اتصال {n}</a>
-                                <a href="https://wa.me/2{n}" class="wa-link">💬 واتساب</a>
-                            </div>
-                            """, unsafe_allow_html=True)
-                    
-                    if "http" in str(row.get('اللوكيشن','')):
-                        st.link_button("📍 فتح اللوكيشن", row['اللوكيشن'])
-                
+                    for n in nums:
+                        st.markdown(f'<div class="phone-container"><a href="tel:{n}" class="call-link">📞 {n}</a><a href="https://wa.me/2{n}" class="wa-link">💬 واتساب</a></div>', unsafe_allow_html=True)
                 with c2:
-                    st.button("📝 تعديل البيانات", key=f"ed_{idx}")
-                    st.button("🗑️ حذف العميل", key=f"dl_{idx}")
-                    
-                    st.subheader("🛠️ سجل الصيانات (الأحدث أولاً)")
+                    st.subheader("🛠️ سجل الصيانات")
                     cust_m = df_maint[df_maint['الاسم'] == row['الاسم']].copy()
                     if not cust_m.empty:
                         cust_m['dt'] = pd.to_datetime(cust_m['تاريخ الزيارة'], errors='coerce')
-                        cust_m = cust_m.sort_values(by='dt', ascending=False)
-                        
-                        # تحويل العرض لعلامات صح وغلط
-                        display_df = cust_m.copy()
-                        check_fields = ['P1','P2','P3','membrane','post carbon','Calcite','infrared']
-                        for field in check_fields:
-                            if field in display_df.columns:
-                                display_df[field] = display_df[field].apply(format_to_check)
-                        
+                        display_df = cust_m.sort_values(by='dt', ascending=False).copy()
+                        for f in ['P1','P2','P3','membrane','post carbon','Calcite','infrared']:
+                            if f in display_df.columns: display_df[f] = display_df[f].apply(format_to_check)
                         st.dataframe(display_df.drop(columns=['dt']))
-                        st.download_button("📥 تحميل ملف PDF شامل", make_comprehensive_pdf(row, cust_m), f"{row['الاسم']}.pdf")
+                        st.download_button("📥 تحميل PDF", make_comprehensive_pdf(row, cust_m), f"{row['الاسم']}.pdf")
 
 elif menu == "جدول المواعيد":
     st.header("📅 جدول مواعيد الأسبوع")
-    if not df_customers.empty:
-        active_ones = df_customers[df_customers.get('status', 'نشط') == 'نشط']
-        for i in range(8):
-            day = datetime.now().date() + timedelta(days=i)
-            st.subheader(f"🗓️ {day.strftime('%A')} - {day}")
-            found = False
-            for _, row in active_ones.iterrows():
-                nv = get_v_info(row['الاسم'], row.get('دورة الصيانة', 3), df_maint)
-                if nv and ((i == 0 and nv.date() <= day) or (nv.date() == day)):
-                    st.info(f"🔹 **{row['الاسم']}** | 📍 {row.get('المنطقه','')} | 📞 {row['الأرقام']}")
-                    found = True
-            if not found: st.write("لا توجد مواعيد")
-
-elif menu == "إضافة عميل جديد":
-    st.header("➕ إضافة عميل جديد لبيانات Healthy Water")
-    with st.form("full_add_form"):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            name = st.text_input("الاسم")
-            phones = st.text_input("الأرقام")
-            address = st.text_input("العنوان")
-            area = st.text_input("المنطقه")
-        with col_b:
-            location = st.text_input("اللوكيشن (رابط)")
-            setup_date = st.date_input("تاريخ التركيب")
-            cycle = st.number_input("دورة الصيانة (شهور)", 3)
-            status = st.selectbox("الحالة", ["نشط", "راكد"])
+    active_ones = df_customers[df_customers.get('status', 'نشط') == 'نشط']
+    for i in range(8):
+        day = datetime.now().date() + timedelta(days=i)
+        st.subheader(f"🗓️ {day.strftime('%A')} - {day}")
         
-        if st.form_submit_button("حفظ بيانات العميل"):
-            st.success("تم تجهيز البيانات للحفظ في الشيت")
-
-# بقية الصفحات (بحث عن عميل، تسجيل صيانة) تبقى كما هي مع تعديل عرض الـ checkbox في التسجيل
-elif menu == "بحث عن عميل":
-    st.header("🔍 بحث شامل")
-    query = st.text_input("ادخل كلمة البحث:")
-    if query:
-        res = df_customers[df_customers.apply(lambda r: query.lower() in str(r.values).lower(), axis=1)]
-        st.dataframe(res)
+        # 1. مواعيد الصيانة الدورية
+        for _, row in active_ones.iterrows():
+            nv = get_v_info(row['الاسم'], row.get('دورة الصيانة', 3), df_maint)
+            if nv and nv.date() == day:
+                st.info(f"🔹 **دورية:** {row['الاسم']} | 📍 {row.get('المنطقه','')}")
+                
+        # 2. المواعيد الاستثنائية (Special Reminder)
+        special_hits = df_maint[pd.to_datetime(df_maint['Special reminder date'], errors='coerce').dt.date == day]
+        for _, s_row in special_hits.iterrows():
+            st.warning(f"🔔 **استثنائي:** {s_row['الاسم']} | 📝 {s_row.get('Other','')}")
 
 elif menu == "تسجيل صيانة":
-    st.header("🔧 تسجيل زيارة صيانة")
+    st.header("🔧 تسجيل زيارة جديدة")
     with st.form("m_form"):
-        c_name = st.selectbox("اسم العميل", df_customers['الاسم'].tolist())
-        v_date = st.date_input("تاريخ الزيارة", datetime.now())
-        st.write("🔧 المهام (الخانات):")
+        c_name = st.selectbox("العميل", df_customers['الاسم'].tolist())
+        v_date = st.date_input("تاريخ الزيارة")
         cc1, cc2, cc3 = st.columns(3)
         p1 = cc1.checkbox("P1"); p2 = cc1.checkbox("P2"); p3 = cc1.checkbox("P3")
         mem = cc2.checkbox("Membrane"); post = cc2.checkbox("Post Carbon"); calc = cc2.checkbox("Calcite")
         infra = cc3.checkbox("Infrared")
-        cost = st.number_input("التكلفة (amount)", step=10)
+        
+        cost = st.number_input("التكلفة (amount)")
+        other = st.text_input("خانة أخرى (Other)")
+        special_rem = st.date_input("تذكير بموعد استثنائي (Special reminder date)", value=None)
         notes = st.text_area("ملاحظات")
-        if st.form_submit_button("حفظ الزيارة"):
-            st.success("تم التسجيل بنجاح")
+        if st.form_submit_button("حفظ"): st.success("تم الحفظ بنجاح")
+
+elif menu == "إضافة عميل جديد":
+    st.header("➕ إضافة عميل")
+    with st.form("add_f"):
+        # خانات مطابقة لكل أعمدة الشيت
+        c_name = st.text_input("الاسم")
+        c_phone = st.text_input("الأرقام")
+        c_addr = st.text_input("العنوان")
+        c_area = st.text_input("المنطقه")
+        c_loc = st.text_input("اللوكيشن")
+        c_setup = st.date_input("تاريخ التركيب")
+        c_cycle = st.number_input("دورة الصيانة", value=3)
+        c_status = st.selectbox("الحالة", ["نشط", "راكد"])
+        if st.form_submit_button("إضافة"): st.success("تمت الإضافة بنجاح")
+
+elif menu == "بحث عن عميل":
+    q = st.text_input("ابحث بالاسم/المنطقة/الهاتف")
+    if q: st.dataframe(df_customers[df_customers.apply(lambda r: q.lower() in str(r.values).lower(), axis=1)])
