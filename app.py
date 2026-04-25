@@ -24,9 +24,9 @@ def clean_text_for_pdf(text):
     if not text: return ""
     return "".join(i for i in str(text) if ord(i) < 128)
 
-# --- 2. نظام تسجيل الدخول ---
+# --- 2. نظام تسجيل الدخول (دعم تعدد الأجهزة والأعمدة الـ 5) ---
 if 'auth' not in st.session_state: st.session_state.auth = None
-if 'user_data' not in st.session_state: st.session_state.user_data = None
+if 'user_data' not in st.session_state: st.session_state.user_data = None # ستخزن الآن قائمة صفوف
 
 def login():
     st.title("💧 Healthy Water Management")
@@ -39,15 +39,22 @@ def login():
                 st.rerun()
             else: st.error("الباسورد غلط يا هندسة!")
     else:
-        u_id = st.sidebar.text_input("رقم الموبايل أو الكود (ID):")
+        u_id = st.sidebar.text_input("رقم الموبايل المسجل:")
         if st.sidebar.button("دخول العميل"):
             df_c = load_all_data("0")
             search_val = str(u_id).strip()
-            if not df_c.empty:
-                match = df_c[df_c['phone'].astype(str).str.contains(re.escape(search_val), na=False)]
-                if not match.empty:
+            if not df_c.empty and search_val:
+                # البحث في الـ 5 أعمدة عن أي تطابق
+                phone_cols = ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4']
+                # نتاكد من وجود الاعمدة في الشيت أولا
+                available_cols = [c for c in phone_cols if c in df_c.columns]
+                
+                mask = df_c[available_cols].astype(str).apply(lambda x: x.str.contains(re.escape(search_val), na=False)).any(axis=1)
+                matches = df_c[mask]
+                
+                if not matches.empty:
                     st.session_state.auth = "customer"
-                    st.session_state.user_data = match.iloc[0]
+                    st.session_state.user_data = matches.to_dict('records')
                     st.rerun()
                 else: st.error("الرقم ده مش متسجل عندنا")
 
@@ -55,7 +62,7 @@ if not st.session_state.auth:
     login()
     st.stop()
 
-# --- 3. تصميم الـ PDF المعدل (علامات صح + صفوف ملونة) ---
+# --- 3. تصميم الـ PDF ---
 class HealthyPDF(FPDF):
     def header(self):
         try: self.image("logo.png", 10, 8, 50) 
@@ -79,10 +86,10 @@ def generate_safe_pdf(row, df_m):
     c_area = clean_text_for_pdf(row.get('area',''))
     
     pdf.cell(0, 10, f"Customer Name: {c_name}", ln=True)
-    pdf.cell(0, 10, f"ID/Phone: {c_phone} | Area: {c_area}", ln=True)
+    pdf.cell(0, 10, f"Phone: {c_phone} | Area: {c_area}", ln=True)
     pdf.ln(5)
     
-    pdf.set_fill_color(40, 116, 166) # لون الهيدر (أزرق غامق)
+    pdf.set_fill_color(40, 116, 166)
     pdf.set_text_color(255, 255, 255)
     headers = ["Date", "P1", "P2", "P3", "Mem", "Post", "Calc", "Infra", "Cost"]
     for h in headers: pdf.cell(31, 10, h, 1, 0, 'C', True)
@@ -93,7 +100,6 @@ def generate_safe_pdf(row, df_m):
     sorted_m = df_m.sort_values(by='v_date_dt', ascending=False)
 
     for i, (_, m) in enumerate(sorted_m.iterrows()):
-        # تلوين الصفوف بالتناوب (أبيض ورمادي)
         if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
         else: pdf.set_fill_color(240, 240, 240)
         
@@ -104,7 +110,7 @@ def generate_safe_pdf(row, df_m):
             status = format_to_check(m.get(f,''))
             if status == "✓":
                 pdf.set_font("ZapfDingbats", '', 10)
-                pdf.cell(31, 10, "4", 1, 0, 'C', True) # رقم 4 في هذا الخط يظهر كعلامة صح
+                pdf.cell(31, 10, "4", 1, 0, 'C', True)
             else:
                 pdf.set_font("Arial", '', 10)
                 pdf.cell(31, 10, "-", 1, 0, 'C', True)
@@ -112,15 +118,14 @@ def generate_safe_pdf(row, df_m):
         pdf.set_font("Arial", '', 10)
         pdf.cell(31, 10, str(m.get('amount','0')), 1, 0, 'C', True)
         pdf.ln()
-    
     return bytes(pdf.output())
 
 # --- 4. التنسيق (CSS) ---
 st.markdown("""
     <style>
     .cust-card { padding: 15px; border-radius: 12px; margin-bottom: 12px; border-right: 15px solid #28a745; background-color: #f9f9f9; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
-    .wa-btn { background:#25d366 !important; color:white !important; padding:8px 15px; border-radius:8px; text-decoration:none; margin:5px; display:inline-block; font-weight:bold; }
-    .call-btn { background:#007bff !important; color:white !important; padding:8px 15px; border-radius:8px; text-decoration:none; margin:5px; display:inline-block; font-weight:bold; }
+    .wa-btn { background:#25d366 !important; color:white !important; padding:6px 12px; border-radius:8px; text-decoration:none; margin:2px; display:inline-block; font-size:13px; }
+    .call-btn { background:#007bff !important; color:white !important; padding:6px 12px; border-radius:8px; text-decoration:none; margin:2px; display:inline-block; font-size:13px; }
     .contact-section { background: #fff; padding: 20px; border-radius: 15px; border: 1px solid #ddd; text-align: center; margin-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
@@ -134,8 +139,8 @@ if st.session_state.auth == "admin":
     menu = st.sidebar.radio("التحكم:", ["بيانات العملاء", "جدول المواعيد", "تسجيل صيانة", "إضافة عميل جديد"])
 else:
     menu = "بروفايلي"
-    st.sidebar.markdown("### 📞 اتصل بنا")
-    st.sidebar.markdown('<a href="tel:01286609535" class="call-btn">📞 فون</a>', unsafe_allow_html=True)
+    st.sidebar.markdown("### 📞 الدعم الفني")
+    st.sidebar.markdown('<a href="tel:01286609535" class="call-btn">📞 مكالمة</a>', unsafe_allow_html=True)
     st.sidebar.markdown('<a href="https://wa.me/201286609535" class="wa-btn">💬 واتساب</a>', unsafe_allow_html=True)
 
 if st.sidebar.button("خروج"):
@@ -145,54 +150,46 @@ if st.sidebar.button("خروج"):
 
 # --- 7. الصفحات ---
 if menu in ["بيانات العملاء", "بروفايلي"]:
-    st.header("📋 سجل العملاء")
+    st.header("📋 سجل العملاء والأجهزة")
     
     if st.session_state.auth == "customer":
-        st.markdown("""<div class="contact-section"><h3>أهلاً بك.. كيف يمكننا مساعدتك اليوم؟</h3>
-        <p>فريق الدعم الفني جاهز للرد على استفساراتك</p>
-        <a href="tel:01286609535" class="call-btn">📞 اتصل بنا الآن</a>
-        <a href="https://wa.me/201286609535" class="wa-btn">💬 مراسلة واتساب</a>
-        </div>""", unsafe_allow_html=True)
-        data_to_show = [st.session_state.user_data.to_dict()]
+        st.info(f"مرحباً بك.. تم العثور على {len(st.session_state.user_data)} أجهزة مسجلة برقمك")
+        data_to_show = st.session_state.user_data
     else:
         data_to_show = df_c.to_dict('records')
     
     for r in data_to_show:
-        st.markdown(f'<div class="cust-card"><h3>👤 {r["name"]}</h3><p>📍 {r.get("area","")} | 📞 {r.get("phone","")}</p></div>', unsafe_allow_html=True)
-        with st.expander("فتح التفاصيل الكاملة"):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**العنوان:** {r.get('adress','')}")
-                st.write(f"**تاريخ التركيب:** {r.get('setup_date','')}")
-                st.write(f"**الدورة:** كل {r.get('cycle',3)} شهور")
-                
-                # استخراج الأرقام المتعددة المحسّن
-                phone_val = str(r.get('phone',''))
-                nums = re.findall(r'01\d{9}', phone_val) 
-                if nums:
-                    for n in nums:
-                        col_btns = st.container()
-                        col_btns.markdown(f'<a href="tel:{n}" class="call-btn">📞 اتصال {n}</a> <a href="https://wa.me/2{n}" class="wa-btn">💬 واتساب</a>', unsafe_allow_html=True)
-                
-                if "http" in str(r.get('location','')): st.link_button("📍 فتح اللوكيشن", r['location'])
-            with col2:
-                st.subheader("🛠️ سجل الصيانات")
-                history = df_m[df_m['name'] == r['name']].copy()
-                if not history.empty:
-                    try:
-                        pdf_output = generate_safe_pdf(r, history)
-                        st.download_button(
-                            label=f"📥 تحميل تقرير PDF ({r['name']})",
-                            data=pdf_output,
-                            file_name=f"{r['name']}.pdf",
-                            mime="application/pdf"
-                        )
-                    except Exception as e: 
-                        st.warning("عفواً، لا يمكن إنشاء PDF حالياً")
+        with st.container():
+            st.markdown(f'<div class="cust-card"><h3>👤 {r["name"]}</h3><p>📍 {r.get("area","")} | {r.get("phone","")}</p></div>', unsafe_allow_html=True)
+            with st.expander(f"تفاصيل جهاز: {r['name']}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**العنوان:** {r.get('adress','')}")
+                    st.write(f"**تاريخ التركيب:** {r.get('setup_date','')}")
+                    st.write(f"**الدورة:** كل {r.get('cycle',3)} شهور")
                     
-                    for f in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-                        if f in history.columns: history[f] = history[f].apply(format_to_check)
-                    st.dataframe(history.sort_values(by='visit_date', ascending=False))
+                    st.write("**أرقام التواصل:**")
+                    for p_field in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4']:
+                        val = str(r.get(p_field, '')).strip()
+                        if val and val != "nan" and len(val) > 5:
+                            st.markdown(f'**{val}:** <a href="tel:{val}" class="call-btn">اتصال</a> <a href="https://wa.me/2{val}" class="wa-btn">واتساب</a>', unsafe_allow_html=True)
+                    
+                    if "http" in str(r.get('location','')): st.link_button("📍 فتح اللوكيشن", r['location'])
+                
+                with col2:
+                    st.subheader("🛠️ سجل الصيانات")
+                    history = df_m[df_m['name'] == r['name']].copy()
+                    if not history.empty:
+                        try:
+                            pdf_output = generate_safe_pdf(r, history)
+                            st.download_button(label=f"📥 PDF لهذا الجهاز", data=pdf_output, file_name=f"{r['name']}.pdf", mime="application/pdf", key=f"pdf_{r['name']}")
+                        except: st.warning("خطأ في الـ PDF")
+                        
+                        for f in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
+                            if f in history.columns: history[f] = history[f].apply(format_to_check)
+                        st.dataframe(history.sort_values(by='visit_date', ascending=False), hide_index=True)
+                    else:
+                        st.write("لا يوجد سجل صيانات لهذا الجهاز")
 
 elif menu == "جدول المواعيد":
     st.header("📅 المواعيد والتنبيهات")
@@ -221,20 +218,24 @@ elif menu == "تسجيل صيانة":
         spec_date = st.date_input("موعد استثنائي", value=None)
         cost = st.number_input("التكلفة")
         notes = st.text_area("ملاحظات")
-        if st.form_submit_button("حفظ"): st.success("تم!")
+        if st.form_submit_button("حفظ"): st.success("تم الحفظ بنجاح")
 
 elif menu == "إضافة عميل جديد":
-    st.header("➕ إضافة عميل")
+    st.header("➕ إضافة عميل/جهاز جديد")
     with st.form("add_f"):
         col1, col2 = st.columns(2)
         with col1:
-            st.text_input("name")
-            st.text_input("phone")
-            st.text_input("adress")
-            st.text_input("area")
+            st.text_input("الاسم (مثال: علي سالمان 1)")
+            st.text_input("الموبايل الأساسي (phone)")
+            st.text_input("موبايل 2 (phone_1)")
+            st.text_input("موبايل 3 (phone_2)")
+            st.text_input("موبايل 4 (phone_3)")
+            st.text_input("موبايل 5 (phone_4)")
         with col2:
-            st.text_input("location")
-            st.date_input("setup_date")
-            st.number_input("cycle", 3)
-            st.selectbox("status", ["نشط", "راكد"])
-        if st.form_submit_button("إضافة"): st.success("تم!")
+            st.text_input("العنوان بالتفصيل")
+            st.text_input("المنطقة (Area)")
+            st.text_input("رابط اللوكيشن")
+            st.date_input("تاريخ التركيب")
+            st.number_input("دورة الصيانة (شهور)", 3)
+            st.selectbox("حالة العميل", ["نشط", "راكد"])
+        if st.form_submit_button("إضافة"): st.success("تم الإضافة!")
