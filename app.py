@@ -7,18 +7,23 @@ from fpdf import FPDF
 # --- 1. إعدادات الصفحة وسرعة الأداء ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide")
 
-@st.cache_data(ttl=600) # تم رفع الوقت لزيادة السرعة القصوى
+@st.cache_data(ttl=600) 
 def load_all_data(gid):
     url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
     try:
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
-        return df.fillna("") # تعبئة الخلايا الفاضية لمنع أخطاء المعالجة
+        return df.fillna("") 
     except: return pd.DataFrame()
 
 def format_to_check(val):
     v = str(val).lower().strip()
     return "✓" if v in ['true', '1', 'checked', 'تم', 'yes'] else "✗"
+
+# دالة لتطهير النصوص من الحروف الغريبة التي تسبب الـ Crash في الـ PDF
+def clean_text_for_pdf(text):
+    if not text: return ""
+    return "".join(i for i in str(text) if ord(i) < 128)
 
 # --- 2. نظام تسجيل الدخول المحسن ---
 if 'auth' not in st.session_state: st.session_state.auth = None
@@ -38,13 +43,15 @@ def login():
         u_id = st.sidebar.text_input("رقم الموبايل أو الكود (ID):")
         if st.sidebar.button("دخول العميل"):
             df_c = load_all_data("0")
-            # بحث مرن يحول الأرقام لنصوص لمنع خطأ الـ ID 101
-            match = df_c[df_c['phone'].astype(str).str.contains(str(u_id))] if not df_c.empty else pd.DataFrame()
-            if not match.empty:
-                st.session_state.auth = "customer"
-                st.session_state.user_data = match.iloc[0]
-                st.rerun()
-            else: st.error("الرقم ده مش متسجل عندنا")
+            # تحسين البحث ليطابق النصوص بدقة ويمنع خطأ عدم التسجيل
+            search_val = str(u_id).strip()
+            if not df_c.empty:
+                match = df_c[df_c['phone'].astype(str).str.contains(search_val, na=False)]
+                if not match.empty:
+                    st.session_state.auth = "customer"
+                    st.session_state.user_data = match.iloc[0]
+                    st.rerun()
+                else: st.error("الرقم ده مش متسجل عندنا")
 
 if not st.session_state.auth:
     login()
@@ -53,7 +60,7 @@ if not st.session_state.auth:
 # --- 3. تصميم الـ PDF الأفقي الاحترافي ---
 class HealthyPDF(FPDF):
     def header(self):
-        try: self.image("logo.png", 10, 8, 50) # لوجو كبير يساراً
+        try: self.image("logo.png", 10, 8, 50) 
         except: pass
         self.set_font('Arial', 'B', 16)
         self.cell(0, 10, 'Service Report - Healthy Water', 0, 1, 'R')
@@ -62,28 +69,27 @@ class HealthyPDF(FPDF):
     def footer(self):
         self.set_y(-25)
         self.set_font('Arial', 'B', 14)
-        # فوتر بخط كبير كما طلبت
         self.cell(0, 10, 'Healthy Water Company - Support: 01286609535', 0, 0, 'C')
 
 def generate_safe_pdf(row, df_m):
-    # استخدام orientation='L' للمقاس الأفقي
     pdf = HealthyPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     pdf.set_font("Arial", 'B', 12)
     
-    # تنظيف النصوص من أي حروف غير مدعومة لمنع الـ Unicode Error
-    clean_name = str(row['name']).encode('ascii', 'ignore').decode('ascii')
-    pdf.cell(0, 10, f"Customer Name: {clean_name}", ln=True)
-    pdf.cell(0, 10, f"ID/Phone: {str(row.get('phone',''))} | Area: {str(row.get('area',''))}", ln=True)
+    # استخدام الدالة المنظفة للنصوص لمنع الـ Unicode Error نهائياً
+    c_name = clean_text_for_pdf(row['name'])
+    c_phone = clean_text_for_pdf(row.get('phone',''))
+    c_area = clean_text_for_pdf(row.get('area',''))
+    
+    pdf.cell(0, 10, f"Customer Name: {c_name}", ln=True)
+    pdf.cell(0, 10, f"ID/Phone: {c_phone} | Area: {c_area}", ln=True)
     pdf.ln(5)
     
-    # الجدول
     pdf.set_fill_color(230, 230, 230)
     headers = ["Date", "P1", "P2", "P3", "Mem", "Post", "Calc", "Infra", "Cost"]
     for h in headers: pdf.cell(31, 10, h, 1, 0, 'C', True)
     pdf.ln()
 
-    # ترتيب الصيانات من الأحدث للأقدم
     df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
     sorted_m = df_m.sort_values(by='v_date_dt', ascending=False)
 
@@ -130,7 +136,6 @@ if menu in ["بيانات العملاء", "بروفايلي"]:
     st.header("📋 سجل العملاء")
     
     if st.session_state.auth == "customer":
-        # قسم اتصل بنا الواضح للعميل
         st.markdown("""<div class="contact-section"><h3>أهلاً بك.. كيف يمكننا مساعدتك اليوم؟</h3>
         <p>فريق الدعم الفني جاهز للرد على استفساراتك</p>
         <a href="tel:01286609535" class="call-btn">📞 اتصل بنا الآن</a>
@@ -149,9 +154,8 @@ if menu in ["بيانات العملاء", "بروفايلي"]:
                 st.write(f"**تاريخ التركيب:** {r.get('setup_date','')}")
                 st.write(f"**الدورة:** كل {r.get('cycle',3)} شهور")
                 
-                # علاج أزرار الاتصال (تظهر لكل رقم مهما كان عددهم)
                 phone_val = str(r.get('phone',''))
-                nums = re.findall(r'01\d{9}', phone_val) # استخراج كل الأرقام المصرية الصحيحة
+                nums = re.findall(r'01\d{9}', phone_val) 
                 if nums:
                     for n in nums:
                         st.markdown(f'<a href="tel:{n}" class="call-btn">📞 اتصال {n}</a> <a href="https://wa.me/2{n}" class="wa-btn">💬 واتساب</a>', unsafe_allow_html=True)
@@ -161,17 +165,16 @@ if menu in ["بيانات العملاء", "بروفايلي"]:
                 st.subheader("🛠️ سجل الصيانات")
                 history = df_m[df_m['name'] == r['name']].copy()
                 if not history.empty:
-                    # زر تحميل الـ PDF (الحل النهائي للـ Unicode)
                     try:
                         pdf_bytes = generate_safe_pdf(r, history)
                         st.download_button(f"📥 تحميل تقرير PDF ({r['name']})", pdf_bytes, f"{r['name']}.pdf", "application/pdf")
-                    except: st.warning("عفواً، لا يمكن إنشاء PDF لهذا العميل حالياً")
+                    except Exception as e: 
+                        st.warning("عفواً، لا يمكن إنشاء PDF حالياً")
                     
                     for f in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
                         if f in history.columns: history[f] = history[f].apply(format_to_check)
                     st.dataframe(history.sort_values(by='visit_date', ascending=False))
 
-# --- بقية الأقسام (جدول المواعيد، تسجيل صيانة، إضافة عميل) تظل كما هي لضمان الاستقرار ---
 elif menu == "جدول المواعيد":
     st.header("📅 المواعيد والتنبيهات")
     tab_a, tab_b = st.tabs(["الصيانات الدورية", "🔔 مواعيد استثنائية"])
@@ -188,7 +191,7 @@ elif menu == "جدول المواعيد":
 elif menu == "تسجيل صيانة":
     st.header("🔧 تسجيل زيارة صيانة")
     with st.form("m_form"):
-        name = st.selectbox("العميل", df_c['name'].tolist())
+        name = st.selectbox("العميل", df_c['name'].tolist() if not df_c.empty else [])
         v_date = st.date_input("تاريخ الزيارة")
         c1, c2, c3 = st.columns(3)
         p1 = c1.checkbox("P1"); p2 = c1.checkbox("P2"); p3 = c1.checkbox("P3")
@@ -202,7 +205,7 @@ elif menu == "تسجيل صيانة":
         if st.form_submit_button("حفظ"): st.success("تم!")
 
 elif menu == "إضافة عميل جديد":
-    st.header("➕ إضافة عميل لصفحة data")
+    st.header("➕ إضافة عميل")
     with st.form("add_f"):
         col1, col2 = st.columns(2)
         with col1:
