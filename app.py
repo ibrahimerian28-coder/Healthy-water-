@@ -24,7 +24,7 @@ def clean_text_for_pdf(text):
     if not text: return ""
     return "".join(i for i in str(text) if ord(i) < 128)
 
-# --- 2. نظام تسجيل الدخول (تم تصحيح البحث الشامل هنا) ---
+# --- 2. نظام تسجيل الدخول ---
 if 'auth' not in st.session_state: st.session_state.auth = None
 if 'user_data' not in st.session_state: st.session_state.user_data = None
 
@@ -44,7 +44,6 @@ def login():
             df_c = load_all_data("0")
             search_val = str(u_id).strip()
             if not df_c.empty:
-                # تصحيح البحث: التأكد من تحويل العمود لنصوص والبحث عن التطابق بداخلها
                 match = df_c[df_c['phone'].astype(str).str.contains(re.escape(search_val), na=False)]
                 if not match.empty:
                     st.session_state.auth = "customer"
@@ -56,7 +55,7 @@ if not st.session_state.auth:
     login()
     st.stop()
 
-# --- 3. تصميم الـ PDF (تم تصحيح مخرجات الـ Bytes هنا) ---
+# --- 3. تصميم الـ PDF المعدل (علامات صح + صفوف ملونة) ---
 class HealthyPDF(FPDF):
     def header(self):
         try: self.image("logo.png", 10, 8, 50) 
@@ -83,24 +82,37 @@ def generate_safe_pdf(row, df_m):
     pdf.cell(0, 10, f"ID/Phone: {c_phone} | Area: {c_area}", ln=True)
     pdf.ln(5)
     
-    pdf.set_fill_color(230, 230, 230)
+    pdf.set_fill_color(40, 116, 166) # لون الهيدر (أزرق غامق)
+    pdf.set_text_color(255, 255, 255)
     headers = ["Date", "P1", "P2", "P3", "Mem", "Post", "Calc", "Infra", "Cost"]
     for h in headers: pdf.cell(31, 10, h, 1, 0, 'C', True)
     pdf.ln()
 
+    pdf.set_text_color(0, 0, 0)
     df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
     sorted_m = df_m.sort_values(by='v_date_dt', ascending=False)
 
-    pdf.set_font("Arial", '', 10)
-    for _, m in sorted_m.iterrows():
-        pdf.cell(31, 10, str(m.get('visit_date',''))[:10], 1, 0, 'C')
+    for i, (_, m) in enumerate(sorted_m.iterrows()):
+        # تلوين الصفوف بالتناوب (أبيض ورمادي)
+        if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
+        else: pdf.set_fill_color(240, 240, 240)
+        
+        pdf.set_font("Arial", '', 10)
+        pdf.cell(31, 10, str(m.get('visit_date',''))[:10], 1, 0, 'C', True)
+        
         for f in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-            check = "V" if format_to_check(m.get(f,'')) == "✓" else "X"
-            pdf.cell(31, 10, check, 1, 0, 'C')
-        pdf.cell(31, 10, str(m.get('amount','0')), 1, 0, 'C')
+            status = format_to_check(m.get(f,''))
+            if status == "✓":
+                pdf.set_font("ZapfDingbats", '', 10)
+                pdf.cell(31, 10, "4", 1, 0, 'C', True) # رقم 4 في هذا الخط يظهر كعلامة صح
+            else:
+                pdf.set_font("Arial", '', 10)
+                pdf.cell(31, 10, "-", 1, 0, 'C', True)
+        
+        pdf.set_font("Arial", '', 10)
+        pdf.cell(31, 10, str(m.get('amount','0')), 1, 0, 'C', True)
         pdf.ln()
     
-    # تصحيح: إخراج الملف كـ bytes مباشرة متوافقة مع streamlit
     return bytes(pdf.output())
 
 # --- 4. التنسيق (CSS) ---
@@ -154,12 +166,13 @@ if menu in ["بيانات العملاء", "بروفايلي"]:
                 st.write(f"**تاريخ التركيب:** {r.get('setup_date','')}")
                 st.write(f"**الدورة:** كل {r.get('cycle',3)} شهور")
                 
-                # تصحيح استخراج الأرقام المتعددة: استخراج كل ما يبدأ بـ 01 ويتبعه 9 أرقام مهما كان ما بينهم
+                # استخراج الأرقام المتعددة المحسّن
                 phone_val = str(r.get('phone',''))
                 nums = re.findall(r'01\d{9}', phone_val) 
                 if nums:
                     for n in nums:
-                        st.markdown(f'<a href="tel:{n}" class="call-btn">📞 اتصال {n}</a> <a href="https://wa.me/2{n}" class="wa-btn">💬 واتساب</a>', unsafe_allow_html=True)
+                        col_btns = st.container()
+                        col_btns.markdown(f'<a href="tel:{n}" class="call-btn">📞 اتصال {n}</a> <a href="https://wa.me/2{n}" class="wa-btn">💬 واتساب</a>', unsafe_allow_html=True)
                 
                 if "http" in str(r.get('location','')): st.link_button("📍 فتح اللوكيشن", r['location'])
             with col2:
