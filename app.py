@@ -2,7 +2,7 @@ import requests
 
 def save_to_gsheet(sheet_name, data_list):
     # الرابط الخاص بك
-    url = "https://script.google.com/macros/s/AKfycbw8Np5JT0CfJvzZzpXMepOmvEZkgL8R2rji-6GukTD3Y6ASZyQtWOk17ubQMR8RveBfIg/exec"
+    url = "https://script.google.com/macros/library/d/1hnnESUof_NxWJY8LpcPYmi-wO8tnmb629fmDgEnNdcovjHVej8etdVck/1"
     params = {"sheet": sheet_name}
     try:
         response = requests.post(url, params=params, json=data_list)
