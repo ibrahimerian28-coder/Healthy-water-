@@ -45,32 +45,66 @@ def get_status_color(next_date, status):
     elif -7 <= diff < 0: return "#dc3545"
     else: return "#8b0000"
 
-# --- 3. تصميم الـ PDF ---
+# --- 3. تصميم الـ PDF المطور ---
 class HealthyPDF(FPDF):
     def header(self):
-        try: self.image("logo.png", 10, 8, 30) 
+        try: self.image("logo.png", 10, 8, 50) # رجعت حجم اللوجو كبير
         except: pass
         self.set_font('Arial', 'B', 14)
         self.cell(0, 10, 'Service Report - Healthy Water', 0, 1, 'R')
-        self.ln(5)
+        self.ln(10)
+
+    def footer(self): # إضافة الفوتر
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 10)
+        self.cell(0, 10, 'Healthy Water Company - Support: 01286609535', 0, 0, 'C')
 
 def generate_safe_pdf(row, df_m):
     pdf = HealthyPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 12)
+    
+    # اسم العميل
+    pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 10, f"Customer: {clean_text_for_pdf(row['name'])}", ln=True)
     pdf.ln(5)
+    
+    # الهيدر للجدول
     headers = ["Date", "P1", "P2", "P3", "Mem", "Post", "Calc", "Infra", "Cost"]
-    for h in headers: pdf.cell(31, 10, h, 1, 0, 'C')
+    pdf.set_fill_color(40, 116, 166) # لون هيدر الجدول
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", 'B', 11)
+    for h in headers:
+        pdf.cell(31, 10, h, 1, 0, 'C', True)
     pdf.ln()
+    
+    # البيانات وتلوين الصفوف
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", '', 11)
     history = df_m[df_m['name'] == row['name']].copy()
+    
+    fill = False # لتبديل اللون
     for _, m in history.tail(10).iterrows():
-        pdf.cell(31, 10, str(m.get('visit_date',''))[:10], 1, 0, 'C')
+        if fill:
+            pdf.set_fill_color(240, 240, 240) # صف رمادي فاتح
+        else:
+            pdf.set_fill_color(255, 255, 255) # صف أبيض
+            
+        pdf.cell(31, 10, str(m.get('visit_date',''))[:10], 1, 0, 'C', True)
+        
+        # علامة الصح الحقيقية باستخدام خط ZapfDingbats
         for f in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-            status = "Y" if format_to_check(m.get(f,'')) == "✓" else "-"
-            pdf.cell(31, 10, status, 1, 0, 'C')
-        pdf.cell(31, 10, str(m.get('amount','0')), 1, 0, 'C')
+            is_checked = format_to_check(m.get(f,'')) == "✓"
+            if is_checked:
+                pdf.set_font('ZapfDingbats', '', 11)
+                pdf.cell(31, 10, '4', 1, 0, 'C', True) # '4' في ZapfDingbats هي علامة الصح
+                pdf.set_font('Arial', '', 11)
+            else:
+                pdf.cell(31, 10, "-", 1, 0, 'C', True)
+                
+        pdf.cell(31, 10, str(m.get('amount','0')), 1, 0, 'C', True)
         pdf.ln()
+        fill = not fill # تبديل للترتيب القادم
+        
     return bytes(pdf.output())
 
 # --- 4. تحميل البيانات ونظام الدخول ---
@@ -122,11 +156,9 @@ if menu == "بيانات العملاء":
                 st.write(f"**العنوان:** {r.get('adress','')}")
                 st.write(f"**تاريخ التركيب:** {r.get('setup_date','')}")
                 st.write(f"**الحالة:** {r.get('status','')}")
-                # إضافة اللوكيشن
                 loc = r.get('location','')
                 if loc: st.markdown(f"🗺️ **اللوكيشن:** [اضغط هنا لفتح الخريطة]({loc})")
                 
-                # أزرار الاتصال والواتساب المحسنة
                 st.write("**تواصل مع العميل:**")
                 for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4']:
                     num = str(r.get(p,'')).strip()
@@ -141,7 +173,6 @@ if menu == "بيانات العملاء":
             with c2:
                 history = df_m[df_m['name'] == r['name']].copy()
                 if not history.empty:
-                    # إضافة الأعمدة المطلوبة post_carbon, calcite, infrared
                     h_cols = ['visit_date','P1','P2','P3','membrane','post_carbon','Calcite','infrared','amount']
                     history_display = history[[c for c in h_cols if c in history.columns]].tail(5).copy()
                     for col in history_display.columns:
@@ -222,7 +253,6 @@ elif menu == "إضافة عميل جديد":
         if st.form_submit_button("إضافة العميل"):
             st.success("تمت الإضافة بنجاح")
 
-# الصفحات المتبقية تظل كما هي لضمان عدم حدوث تضارب
 elif menu == "المخزن 📦":
     st.header("📦 إدارة المخزن")
     if not df_inv.empty:
