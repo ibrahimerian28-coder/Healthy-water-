@@ -1,3 +1,14 @@
+import requests # لازم تتأكد إن المكتبة دي موجودة
+
+def save_to_gsheet(sheet_name, data_list):
+    # حط الرابط اللي خدته من جوجل شيت هنا مكان النجوم
+    url = "رابط_الـ_Web_App_اللي_نسخته_هنا"
+    params = {"sheet": sheet_name}
+    try:
+        response = requests.post(url, params=params, json=data_list)
+        return response.status_code == 200
+    except:
+        return False
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
