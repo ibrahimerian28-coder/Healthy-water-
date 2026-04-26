@@ -240,10 +240,11 @@ elif menu == "تسجيل صيانة 🔧":
             # تجهيز البيانات في قائمة متوافقة مع أعمدة الشيت
             # الترتيب: التاريخ، الاسم، الشمعات (1-3)، ممبرين، بوست، كالسايت، إنفرا، المبلغ، ملاحظات، موعد استثنائي
             new_data = [
-                str(v_date), 
                 name, 
+                str(v_date), 
                 p1, p2, p3, 
-                mem, post, calc, infra, 
+                membrane, post, calcite, infra,
+                other,
                 amount, 
                 notes, 
                 str(s_date) if s_date else ""
