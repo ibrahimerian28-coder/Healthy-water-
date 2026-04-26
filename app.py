@@ -237,25 +237,32 @@ elif menu == "تسجيل صيانة 🔧":
         amount = st.number_input("المبلغ المحصل", min_value=0.0)
         notes = st.text_area("ملاحظات الزيارة")
         if st.form_submit_button("حفظ البيانات"):
-            # تجهيز البيانات في قائمة متوافقة مع أعمدة الشيت
-            # الترتيب: التاريخ، الاسم، الشمعات (1-3)، ممبرين، بوست، كالسايت، إنفرا، المبلغ، ملاحظات، موعد استثنائي
+            # ترتيب البيانات ليطابق الشيت تماماً:
+            # name, visit_date, P1, P2, P3, membrane, post_carbon, Calcite, infrared, other, amount, notes, special_date, customer_id
             new_data = [
-                name, 
-                str(v_date), 
-                p1, p2, p3, 
-                membrane, post, calcite, infra,
-                other,
-                amount, 
-                notes, 
-                str(s_date) if s_date else ""
+                name,                           # name
+                str(v_date),                    # visit_date
+                p1,                             # P1
+                p2,                             # P2
+                p3,                             # P3
+                mem,                            # membrane
+                post,                           # post_carbon
+                calc,                           # Calcite
+                infra,                          # infrared
+                other_item,                     # other (قطعة الغيار الإضافية)
+                amount,                         # amount
+                notes,                          # notes
+                str(s_date) if s_date else "",  # special_date
+                ""                              # customer_id (خانة فارغة لضبط الترتيب)
             ]
             
-            # محاولة الحفظ في شيت اسمه "Maintenance" (تأكد أن هذا هو اسم الصفحة في الإكسيل)
-            with st.spinner("جاري الحفظ في جوجل شيت..."):
+            with st.spinner("جاري الحفظ في المكان الصحيح..."):
                 if save_to_gsheet("Maintenance", new_data):
-                    st.success("تم الحفظ في الإكسيل بنجاح ✅")
-                    # مسح الكاش لتظهر الزيارة الجديدة فوراً في صفحة بيانات العملاء
+                    st.success("تم الحفظ بنجاح وتوجيه كل بيان لعموده الصحيح ✅")
+                    # مسح الكاش لتحديث البيانات فوراً في التطبيق
                     st.cache_data.clear()
+                else:
+                    st.error("فشل الحفظ، تأكد من إعدادات الـ Web App")
                 else:
                     st.error("فشل الحفظ. تأكد من إعدادات الـ Web App في جوجل شيت.")
 
