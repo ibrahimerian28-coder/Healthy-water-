@@ -1,13 +1,14 @@
-import requests # لازم تتأكد إن المكتبة دي موجودة
+import requests
 
 def save_to_gsheet(sheet_name, data_list):
-    # حط الرابط اللي خدته من جوجل شيت هنا مكان النجوم
-    url = "رابط_الـ_Web_App_اللي_نسخته_هنا"
+    # الرابط الخاص بك
+    url = "https://script.google.com/macros/s/AKfycbw8Np5JT0CfJvzZzpXMepOmvEZkgL8R2rji-6GukTD3Y6ASZyQtWOk17ubQMR8RveBfIg/exec"
     params = {"sheet": sheet_name}
     try:
         response = requests.post(url, params=params, json=data_list)
         return response.status_code == 200
-    except:
+    except Exception as e:
+        st.error(f"خطأ في الاتصال: {e}")
         return False
 import streamlit as st
 import pandas as pd
@@ -235,7 +236,27 @@ elif menu == "تسجيل صيانة 🔧":
         other_item = st.selectbox("إضافة قطعة غيار أخرى", ["لا يوجد"] + (df_inv['item_name'].tolist() if not df_inv.empty else []))
         amount = st.number_input("المبلغ المحصل", min_value=0.0)
         notes = st.text_area("ملاحظات الزيارة")
-        if st.form_submit_button("حفظ البيانات"): st.success("تم الحفظ بنجاح")
+        if st.form_submit_button("حفظ البيانات"):
+            # تجهيز البيانات في قائمة متوافقة مع أعمدة الشيت
+            # الترتيب: التاريخ، الاسم، الشمعات (1-3)، ممبرين، بوست، كالسايت، إنفرا، المبلغ، ملاحظات، موعد استثنائي
+            new_data = [
+                str(v_date), 
+                name, 
+                p1, p2, p3, 
+                mem, post, calc, infra, 
+                amount, 
+                notes, 
+                str(s_date) if s_date else ""
+            ]
+            
+            # محاولة الحفظ في شيت اسمه "Maintenance" (تأكد أن هذا هو اسم الصفحة في الإكسيل)
+            with st.spinner("جاري الحفظ في جوجل شيت..."):
+                if save_to_gsheet("Maintenance", new_data):
+                    st.success("تم الحفظ في الإكسيل بنجاح ✅")
+                    # مسح الكاش لتظهر الزيارة الجديدة فوراً في صفحة بيانات العملاء
+                    st.cache_data.clear()
+                else:
+                    st.error("فشل الحفظ. تأكد من إعدادات الـ Web App في جوجل شيت.")
 
 elif menu == "المصروفات والحسابات 💸":
     st.header("💸 سجل المصروفات")
