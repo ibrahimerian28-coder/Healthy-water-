@@ -31,7 +31,7 @@ def get_arabic_day(date_obj):
     }
     return days.get(date_obj.strftime('%A'), date_obj.strftime('%A'))
 
-@st.cache_data(ttl=5) 
+@st.cache_data(ttl=60) 
 def load_all_data(gid):
     url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
     try:
@@ -101,7 +101,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد (تم التعديل هنا لحل مشكلة الترتيب و الـ None) ---
+# --- 4. تحميل البيانات ومعالجة المواعيد (تم التعديل هنا لحل مشكلة الترتيب و الـ None نهائياً) ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -110,15 +110,25 @@ df_exp = load_all_data("288947510")
 last_v_info = {}
 
 if not df_m.empty:
+    # تنظيف الأسماء لضمان المطابقة
     df_m['name'] = df_m['name'].astype(str).str.strip()
-    # تحويل التاريخ بشكل ذكي جداً لضمان عدم وجود None
+    df_c['name'] = df_c['name'].astype(str).str.strip()
+    
+    # تحويل التاريخ مع تنظيف المسافات الزائدة
+    df_m['visit_date'] = df_m['visit_date'].astype(str).str.strip()
     df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', dayfirst=True)
-    # ترتيب الجدول: الأحدث فوق ليكون الـ iloc[-1] دايماً هو الأخير زمنياً
+    
+    # ترتيب الجدول بحيث يكون الأحدث لكل عميل في الأسفل قبل المعالجة
     df_m = df_m.sort_values(by='v_date_dt', ascending=True)
+    
     for name in df_m['name'].unique():
         user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
         if not user_history.empty:
-            last_v_info[name] = user_history.iloc[-1].to_dict()
+            last_row = user_history.iloc[-1].to_dict()
+            # تنظيف ومعالجة التاريخ الاستثنائي فوراً
+            s_val = str(last_row.get('special_date', "")).strip()
+            last_row['spec_dt_clean'] = pd.to_datetime(s_val, errors='coerce', dayfirst=True)
+            last_v_info[name] = last_row
 
 if 'auth' not in st.session_state: st.session_state.auth = None
 if not st.session_state.auth:
@@ -145,13 +155,15 @@ if menu == "بيانات العملاء":
         
         if last_v:
             last_visit_date = last_v['v_date_dt'].date() if pd.notnull(last_v['v_date_dt']) else None
-            spec_val = last_v.get('special_date', "")
-            spec_dt = pd.to_datetime(spec_val, errors='coerce', dayfirst=True)
+            spec_dt = last_v.get('spec_dt_clean')
             
             if pd.notnull(spec_dt):
                 next_d = spec_dt.date()
             elif last_visit_date:
-                cycle = int(r.get('maintenance_cycle', 3))
+                try:
+                    cycle = int(float(str(r.get('maintenance_cycle', 3)).strip()))
+                except:
+                    cycle = 3
                 next_d = last_visit_date + timedelta(days=cycle * 30)
 
         status_color = get_status_color(next_d, r.get('status', ''))
@@ -161,7 +173,7 @@ if menu == "بيانات العملاء":
         st.markdown(f"""
             <div style="padding:12px; border-radius:8px; margin-bottom:10px; background-color:#ffffff; border-right:15px solid {status_color}; border-left:1px solid #ddd; border-top:1px solid #ddd; border-bottom:1px solid #ddd; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
                 <h4 style="margin:0; color:#333;">👤 {name} 
-                <span style="font-size:12px; color:red;">{" (استثنائي: " + str(next_d) + ")" if next_d and pd.notnull(spec_val) and spec_val != "" else ""}</span></h4>
+                <span style="font-size:12px; color:red;">{" (استثنائي: " + str(next_d) + ")" if next_d and pd.notnull(last_v.get('spec_dt_clean')) else ""}</span></h4>
                 <p style="margin:0; font-size:14px; color:#666;">📍 {r.get('area','')} | 📞 {r.get('phone','')} | الموعد: {next_d if next_d else 'None'}</p>
             </div>
             """, unsafe_allow_html=True)
@@ -181,7 +193,6 @@ if menu == "بيانات العملاء":
                 for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4']:
                     num = str(r.get(p,'')).strip()
                     if num and num not in ["nan", "", "0.0"]:
-                        # استعادة شكل الأزرار
                         st.markdown(f"""
                         <div style="margin-bottom:5px;">
                             <span style="font-weight:bold;">📞 {num}:</span> 
@@ -196,14 +207,16 @@ if menu == "بيانات العملاء":
                     st.info("سيتم فتح واجهة التعديل قريباً")
                 
                 if col_btn2.button("🗑️ حذف العميل", key=f"del_cust_{idx}"):
-                    if st.warning(f"هل أنت متأكد من حذف العميل {name}؟"):
+                    # إضافة رسالة تأكيد الحذف
+                    st.error(f"⚠️ هل أنت متأكد من حذف العميل {name} نهائياً؟")
+                    if st.button("نعم، احذف العميل الآن", key=f"conf_del_cust_{idx}"):
                         if execute_gsheet_action("delete", "Customers", row_index=idx+2):
                             st.success("تم حذف العميل")
                             st.cache_data.clear()
                             st.rerun()
 
             with c2:
-                # ترتيب سجل الزيارات: الأحدث فوق
+                # ترتيب سجل الزيارات: الأحدث فوق دائماً للعرض
                 history = df_m[df_m['name'] == name].copy().sort_values(by='v_date_dt', ascending=False)
                 if not history.empty:
                     st.write("**سجل الزيارات (الأحدث أولاً):**")
@@ -239,7 +252,7 @@ elif menu == "جدول المواعيد":
     for _, r in df_c.iterrows():
         lv = last_v_info.get(r['name'], {})
         if lv:
-            sd = pd.to_datetime(lv.get('special_date'), errors='coerce', dayfirst=True)
+            sd = lv.get('spec_dt_clean')
             if pd.notnull(sd): nd = sd.date()
             else: nd = (lv['v_date_dt'] + timedelta(days=int(r.get('maintenance_cycle',3))*30)).date()
             sched_list.append({'name': r['name'], 'date': nd, 'area': r.get('area','')})
