@@ -99,13 +99,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد ---
-df_c = load_all_data("0")
-df_m = load_all_data("2120582392")
-df_inv = load_all_data("1767710106")
-df_exp = load_all_data("288947510")
-
-# --- 4. تحميل البيانات ومعالجة المواعيد (النسخة النهائية المصلحة) ---
+# --- 4. تحميل البيانات ومعالجة المواعيد (نسخة مرنة جداً) ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -114,23 +108,22 @@ df_exp = load_all_data("288947510")
 last_v_info = {}
 
 if not df_m.empty:
-    # 1. تنظيف الأسماء من أي مسافات مخفية لضمان الربط
+    # تنظيف الأسماء
     df_m['name'] = df_m['name'].astype(str).str.strip()
     
-    # 2. تحويل التاريخ مع معالجة الأخطاء (errors='coerce' تحول أي خطأ لـ NaT)
+    # تحويل التاريخ بأكثر طريقة مرنة ممكنة
+    # سنحول التاريخ، والصفوف اللي فيها مشكلة هتبقى NaT (Not a Time) بس مش هنحذفها
     df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
     
-    # 3. حذف أي صفوف فشل تحويل تاريخها (لحماية الحسابات)
-    df_m = df_m.dropna(subset=['v_date_dt'])
+    # ترتيب من الأقدم للأحدث بناءً على التاريخ (الصفوف اللي بدون تاريخ هتبقى في الآخر)
+    df_m = df_m.sort_values(by='v_date_dt', ascending=True)
     
-    # 4. ترتيب البيانات: من الأقدم للأحدث بناءً على الاسم والتاريخ
-    df_m = df_m.sort_values(by=['name', 'v_date_dt'], ascending=[True, True])
-    
-    # 5. استخراج "آخر زيارة" لكل عميل بشكل دقيق
-    # نقوم بتجميع البيانات بالاسم ونأخذ الصف الأخير (أحدث تاريخ)
-    last_v_info = df_m.groupby('name').last().to_dict('index')
+    # بناء قاموس "آخر زيارة" يدويًا لضمان الدقة
+    for name in df_m['name'].unique():
+        user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
+        if not user_history.empty:
+            last_v_info[name] = user_history.iloc[-1].to_dict()
 
-# ملاحظة: الآن أصبح لدينا قاموس (last_v_info) يحتوي على أحدث البيانات لكل اسم
 
 
 
@@ -147,24 +140,25 @@ menu = st.sidebar.radio("التحكم:", ["بيانات العملاء", "جدو
 
 # --- 5. الصفحات ---
 
-if menu == "بيانات العملاء":
-    st.header("📋 سجل العملاء")
-    search = st.text_input("ابحث عن عميل بالاسم أو المنطقة...")
-    filtered_df = df_c[df_c['name'].str.contains(search) | df_c['area'].str.contains(search)] if search else df_c
-
-    for idx, r in filtered_df.iterrows():
-        name = r['name']
+        # داخل loop العملاء:
         last_v = last_v_info.get(name, {})
         next_d, last_visit_date, spec_d = None, None, None
         
         if last_v:
+            # استخراج تاريخ آخر زيارة من القاموس الذي جهزناه فوق
             last_visit_date = last_v['v_date_dt'].date() if pd.notnull(last_v['v_date_dt']) else None
-            spec_d = pd.to_datetime(last_v.get('special_date'), errors='coerce')
-            if pd.notnull(spec_d): next_d = spec_d.date()
+            
+            # التحقق من وجود موعد استثنائي
+            spec_val = last_v.get('special_date', "")
+            spec_d = pd.to_datetime(spec_val, errors='coerce')
+            
+            if pd.notnull(spec_d):
+                next_d = spec_d.date()
             elif last_visit_date:
+                # حساب الموعد بناءً على الدورة (مثلاً 3 شهور)
                 cycle = int(r.get('maintenance_cycle', 3))
                 next_d = last_visit_date + timedelta(days=cycle * 30)
-        
+
         status_color = get_status_color(next_d, r.get('status', ''))
         anchor_name = name.replace(" ", "_")
         st.markdown(f'<div id="{anchor_name}"></div>', unsafe_allow_html=True)
