@@ -108,24 +108,13 @@ df_exp = load_all_data("288947510")
 last_v_info = {}
 
 if not df_m.empty:
-    # تنظيف الأسماء
     df_m['name'] = df_m['name'].astype(str).str.strip()
-    
-    # تحويل التاريخ بأكثر طريقة مرنة ممكنة
-    # سنحول التاريخ، والصفوف اللي فيها مشكلة هتبقى NaT (Not a Time) بس مش هنحذفها
     df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
-    
-    # ترتيب من الأقدم للأحدث بناءً على التاريخ (الصفوف اللي بدون تاريخ هتبقى في الآخر)
     df_m = df_m.sort_values(by='v_date_dt', ascending=True)
-    
-    # بناء قاموس "آخر زيارة" يدويًا لضمان الدقة
     for name in df_m['name'].unique():
         user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
         if not user_history.empty:
             last_v_info[name] = user_history.iloc[-1].to_dict()
-
-
-
 
 if 'auth' not in st.session_state: st.session_state.auth = None
 if not st.session_state.auth:
@@ -140,22 +129,24 @@ menu = st.sidebar.radio("التحكم:", ["بيانات العملاء", "جدو
 
 # --- 5. الصفحات ---
 
-        # داخل loop العملاء:
+if menu == "بيانات العملاء":
+    st.header("📋 سجل العملاء")
+    search = st.text_input("ابحث عن عميل بالاسم أو المنطقة...")
+    filtered_df = df_c[df_c['name'].str.contains(search) | df_c['area'].str.contains(search)] if search else df_c
+
+    for idx, r in filtered_df.iterrows():
+        name = r['name']
         last_v = last_v_info.get(name, {})
         next_d, last_visit_date, spec_d = None, None, None
         
         if last_v:
-            # استخراج تاريخ آخر زيارة من القاموس الذي جهزناه فوق
             last_visit_date = last_v['v_date_dt'].date() if pd.notnull(last_v['v_date_dt']) else None
-            
-            # التحقق من وجود موعد استثنائي
             spec_val = last_v.get('special_date', "")
             spec_d = pd.to_datetime(spec_val, errors='coerce')
             
             if pd.notnull(spec_d):
                 next_d = spec_d.date()
             elif last_visit_date:
-                # حساب الموعد بناءً على الدورة (مثلاً 3 شهور)
                 cycle = int(r.get('maintenance_cycle', 3))
                 next_d = last_visit_date + timedelta(days=cycle * 30)
 
@@ -252,32 +243,13 @@ elif menu == "تسجيل صيانة 🔧":
         amount = st.number_input("المبلغ المحصل", min_value=0.0)
         notes = st.text_area("ملاحظات الزيارة")
         if st.form_submit_button("حفظ البيانات"):
-            # ترتيب البيانات ليطابق الشيت تماماً:
-            # name, visit_date, P1, P2, P3, membrane, post_carbon, Calcite, infrared, other, amount, notes, special_date, customer_id
-            new_data = [
-                name,                           # name
-                str(v_date),                    # visit_date
-                p1,                             # P1
-                p2,                             # P2
-                p3,                             # P3
-                mem,                            # membrane
-                post,                           # post_carbon
-                calc,                           # Calcite
-                infra,                          # infrared
-                other_item,                     # other (قطعة الغيار الإضافية)
-                amount,                         # amount
-                notes,                          # notes
-                str(s_date) if s_date else "",  # special_date
-                ""                              # customer_id (خانة فارغة لضبط الترتيب)
-            ]
-            
-            with st.spinner("جاري الحفظ في المكان الصحيح..."):
+            new_data = [name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_item, amount, notes, str(s_date) if s_date else "", ""]
+            with st.spinner("جاري الحفظ..."):
                 if save_to_gsheet("Maintenance", new_data):
-                    st.success("تم الحفظ بنجاح وتوجيه كل بيان لعموده الصحيح ✅")
-                    # مسح الكاش لتحديث البيانات فوراً في التطبيق
+                    st.success("تم الحفظ بنجاح ✅")
                     st.cache_data.clear()
                 else:
-                    st.error("فشل الحفظ. تأكد من إعدادات الـ Web App في جوجل شيت.")
+                    st.error("فشل الحفظ.")
 
 elif menu == "المصروفات والحسابات 💸":
     st.header("💸 سجل المصروفات")
