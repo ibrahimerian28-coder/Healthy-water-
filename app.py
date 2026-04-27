@@ -105,13 +105,27 @@ df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
 df_exp = load_all_data("288947510")
 
+# --- 4. تحميل البيانات ومعالجة المواعيد (النسخة المصلحة) ---
+df_c = load_all_data("0")
+df_m = load_all_data("2120582392")
+df_inv = load_all_data("1767710106")
+df_exp = load_all_data("288947510")
+
 if not df_m.empty:
-    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
-    df_m = df_m.dropna(subset=['v_date_dt'])
-    # نأخذ آخر زيارة لكل اسم بناءً على أحدث تاريخ
-    last_v_info = df_m.sort_values('v_date_dt').groupby('name').last().to_dict('index')
+    # تحويل التاريخ مع السماح بتنسيقات مختلفة (يوم-شهر-سنة أو سنة-شهر-يوم)
+    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', dayfirst=False)
+    
+    # إصلاح مشكلة الأسماء: مسح أي مسافات مخفية قد تأتي من الإكسيل
+    df_m['name'] = df_m['name'].astype(str).str.strip()
+    
+    # ترتيب البيانات لضمان أن آخر زيارة هي الأحدث فعلياً
+    df_m = df_m.sort_values(by=['name', 'v_date_dt'], ascending=[True, True])
+    
+    # نأخذ آخر زيارة لكل اسم
+    last_v_info = df_m.dropna(subset=['v_date_dt']).groupby('name').last().to_dict('index')
 else:
     last_v_info = {}
+
 
 if 'auth' not in st.session_state: st.session_state.auth = None
 if not st.session_state.auth:
