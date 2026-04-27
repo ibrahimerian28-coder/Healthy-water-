@@ -101,7 +101,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد ---
+# --- 4. تحميل البيانات ومعالجة المواعيد (تم تحسين المنطق هنا) ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -112,14 +112,17 @@ last_v_info = {}
 if not df_m.empty:
     df_m['name'] = df_m['name'].astype(str).str.strip()
     df_c['name'] = df_c['name'].astype(str).str.strip()
-    df_m['visit_date'] = df_m['visit_date'].astype(str).str.strip()
+    
+    # تحويل التواريخ بشكل أكثر ذكاءً
     df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', dayfirst=True)
+    # ترتيب لضمان أخذ آخر زيارة فعلياً
     df_m = df_m.sort_values(by='v_date_dt', ascending=True)
     
     for name in df_m['name'].unique():
         user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
         if not user_history.empty:
             last_row = user_history.iloc[-1].to_dict()
+            # معالجة التاريخ الاستثنائي
             s_val = str(last_row.get('special_date', "")).strip()
             last_row['spec_dt_clean'] = pd.to_datetime(s_val, errors='coerce', dayfirst=True)
             last_v_info[name] = last_row
@@ -148,7 +151,10 @@ if menu == "بيانات العملاء":
         next_d, last_visit_date = None, None
         
         if last_v:
-            last_visit_date = last_v['v_date_dt'].date() if pd.notnull(last_v['v_date_dt']) else None
+            # التأكد من تحويل التاريخ لكائن تاريخ بايثون للمقارنة
+            if pd.notnull(last_v['v_date_dt']):
+                last_visit_date = last_v['v_date_dt'].date()
+            
             spec_dt = last_v.get('spec_dt_clean')
             if pd.notnull(spec_dt):
                 next_d = spec_dt.date()
@@ -176,9 +182,8 @@ if menu == "بيانات العملاء":
             with c1:
                 st.write(f"**العنوان:** {r.get('adress','')}")
                 st.write(f"**تاريخ التركيب:** {r.get('setup_date','')}")
-                st.write(f"**الحالة:** {r.get('status','')}")
-                st.write(f"**آخر زيارة:** {last_visit_date if last_visit_date else 'None'}")
-                st.write(f"**الموعد القادم:** :blue[{next_d if next_d else 'None'}]")
+                st.write(f"**آخر زيارة:** {last_visit_date if last_visit_date else 'لا يوجد سجل'}")
+                st.write(f"**الموعد القادم:** :blue[{next_d if next_d else 'غير محدد'}]")
                 loc = r.get('location','')
                 if loc: st.markdown(f"🗺️ **اللوكيشن:** [اضغط هنا لفتح الخريطة]({loc})")
                 
@@ -214,7 +219,6 @@ if menu == "بيانات العملاء":
                     h_display = history[['visit_date','P1','P2','P3','membrane','post_carbon','Calcite','infrared','amount','notes']].head(10).copy()
                     
                     for h_idx, h_row in h_display.iterrows():
-                        # تجميع الشمعات التي تم تغييرها في نص واحد
                         parts = []
                         if format_to_check(h_row['P1']) == "✅": parts.append("P1")
                         if format_to_check(h_row['P2']) == "✅": parts.append("P2")
@@ -256,11 +260,20 @@ elif menu == "جدول المواعيد":
     sched_list = []
     for _, r in df_c.iterrows():
         lv = last_v_info.get(r['name'], {})
+        nd = None
         if lv:
             sd = lv.get('spec_dt_clean')
-            if pd.notnull(sd): nd = sd.date()
-            else: nd = (lv['v_date_dt'] + timedelta(days=int(r.get('maintenance_cycle',3))*30)).date()
-            sched_list.append({'name': r['name'], 'date': nd, 'area': r.get('area','')})
+            if pd.notnull(sd): 
+                nd = sd.date()
+            elif pd.notnull(lv.get('v_date_dt')):
+                try:
+                    cycle = int(float(str(r.get('maintenance_cycle', 3)).strip()))
+                except:
+                    cycle = 3
+                nd = (lv['v_date_dt'] + timedelta(days=cycle*30)).date()
+            
+            if nd:
+                sched_list.append({'name': r['name'], 'date': nd, 'area': r.get('area','')})
     
     if sched_list:
         sdf = pd.DataFrame(sched_list)
