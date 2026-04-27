@@ -101,7 +101,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد (تم التعديل هنا لحل مشكلة الترتيب و الـ None نهائياً) ---
+# --- 4. تحميل البيانات ومعالجة المواعيد ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -110,22 +110,16 @@ df_exp = load_all_data("288947510")
 last_v_info = {}
 
 if not df_m.empty:
-    # تنظيف الأسماء لضمان المطابقة
     df_m['name'] = df_m['name'].astype(str).str.strip()
     df_c['name'] = df_c['name'].astype(str).str.strip()
-    
-    # تحويل التاريخ مع تنظيف المسافات الزائدة
     df_m['visit_date'] = df_m['visit_date'].astype(str).str.strip()
     df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', dayfirst=True)
-    
-    # ترتيب الجدول بحيث يكون الأحدث لكل عميل في الأسفل قبل المعالجة
     df_m = df_m.sort_values(by='v_date_dt', ascending=True)
     
     for name in df_m['name'].unique():
         user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
         if not user_history.empty:
             last_row = user_history.iloc[-1].to_dict()
-            # تنظيف ومعالجة التاريخ الاستثنائي فوراً
             s_val = str(last_row.get('special_date', "")).strip()
             last_row['spec_dt_clean'] = pd.to_datetime(s_val, errors='coerce', dayfirst=True)
             last_v_info[name] = last_row
@@ -151,12 +145,11 @@ if menu == "بيانات العملاء":
     for idx, r in filtered_df.iterrows():
         name = r['name']
         last_v = last_v_info.get(name, {})
-        next_d, last_visit_date, spec_d = None, None, None
+        next_d, last_visit_date = None, None
         
         if last_v:
             last_visit_date = last_v['v_date_dt'].date() if pd.notnull(last_v['v_date_dt']) else None
             spec_dt = last_v.get('spec_dt_clean')
-            
             if pd.notnull(spec_dt):
                 next_d = spec_dt.date()
             elif last_visit_date:
@@ -174,7 +167,7 @@ if menu == "بيانات العملاء":
             <div style="padding:12px; border-radius:8px; margin-bottom:10px; background-color:#ffffff; border-right:15px solid {status_color}; border-left:1px solid #ddd; border-top:1px solid #ddd; border-bottom:1px solid #ddd; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
                 <h4 style="margin:0; color:#333;">👤 {name} 
                 <span style="font-size:12px; color:red;">{" (استثنائي: " + str(next_d) + ")" if next_d and pd.notnull(last_v.get('spec_dt_clean')) else ""}</span></h4>
-                <p style="margin:0; font-size:14px; color:#666;">📍 {r.get('area','')} | 📞 {r.get('phone','')} | الموعد: {next_d if next_d else 'None'}</p>
+                <p style="margin:0; font-size:14px; color:#666;">📍 {r.get('area','')} | 📞 {r.get('phone','')} | الموعد القادم: <b>{next_d if next_d else 'غير محدد'}</b></p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -207,7 +200,6 @@ if menu == "بيانات العملاء":
                     st.info("سيتم فتح واجهة التعديل قريباً")
                 
                 if col_btn2.button("🗑️ حذف العميل", key=f"del_cust_{idx}"):
-                    # إضافة رسالة تأكيد الحذف
                     st.error(f"⚠️ هل أنت متأكد من حذف العميل {name} نهائياً؟")
                     if st.button("نعم، احذف العميل الآن", key=f"conf_del_cust_{idx}"):
                         if execute_gsheet_action("delete", "Customers", row_index=idx+2):
@@ -216,18 +208,32 @@ if menu == "بيانات العملاء":
                             st.rerun()
 
             with c2:
-                # ترتيب سجل الزيارات: الأحدث فوق دائماً للعرض
                 history = df_m[df_m['name'] == name].copy().sort_values(by='v_date_dt', ascending=False)
                 if not history.empty:
                     st.write("**سجل الزيارات (الأحدث أولاً):**")
-                    h_display = history[['visit_date','P1','P2','P3','membrane','post_carbon','Calcite','infrared','amount']].head(10).copy()
-                    for col in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-                        h_display[col] = h_display[col].apply(format_to_check)
+                    h_display = history[['visit_date','P1','P2','P3','membrane','post_carbon','Calcite','infrared','amount','notes']].head(10).copy()
                     
                     for h_idx, h_row in h_display.iterrows():
+                        # تجميع الشمعات التي تم تغييرها في نص واحد
+                        parts = []
+                        if format_to_check(h_row['P1']) == "✅": parts.append("P1")
+                        if format_to_check(h_row['P2']) == "✅": parts.append("P2")
+                        if format_to_check(h_row['P3']) == "✅": parts.append("P3")
+                        if format_to_check(h_row['membrane']) == "✅": parts.append("Mem")
+                        if format_to_check(h_row['post_carbon']) == "✅": parts.append("Post")
+                        if format_to_check(h_row['Calcite']) == "✅": parts.append("Calc")
+                        if format_to_check(h_row['infrared']) == "✅": parts.append("Infra")
+                        
+                        shamaat_text = " | ".join(parts) if parts else "لم يتم تغيير شمعات"
+                        
                         st.markdown(f"""
-                        <div style="display:flex; justify-content:space-between; align-items:center; background:#f1f1f1; padding:8px; border-radius:5px; margin-bottom:5px; font-size:13px; border-left:5px solid #007bff;">
-                            <span>📅 {h_row['visit_date']} | 💰 {h_row['amount']}</span>
+                        <div style="background:#f9f9f9; padding:10px; border-radius:5px; margin-bottom:10px; border-left:5px solid #007bff; font-size:13px;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <b>📅 {h_row['visit_date']}</b>
+                                <b style="color:green;">💰 {h_row['amount']} ج.م</b>
+                            </div>
+                            <div style="margin-top:5px; color:#555;">🛠️ {shamaat_text}</div>
+                            {f'<div style="margin-top:3px; font-style:italic; color:#888;">📝 {h_row["notes"]}</div>' if h_row["notes"] else ""}
                         </div>
                         """, unsafe_allow_html=True)
                         
@@ -235,7 +241,6 @@ if menu == "بيانات العملاء":
                         if btn_c1.button("🖋️ تعديل", key=f"ed_v_{h_idx}"):
                              st.info("تعديل الزيارة...")
                         if btn_c2.button("🗑️ حذف", key=f"del_v_{h_idx}"):
-                            # تأكيد حذف الزيارة
                             st.error(f"تأكيد: حذف زيارة يوم {h_row['visit_date']}؟")
                             if st.button("نعم، احذف الزيارة", key=f"conf_del_v_{h_idx}"):
                                 if execute_gsheet_action("delete", "Maintenance", row_index=h_idx+2):
