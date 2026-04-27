@@ -1,4 +1,9 @@
 import requests
+import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta
+import re
+from fpdf import FPDF
 
 def save_to_gsheet(sheet_name, data_list):
     # الرابط الخاص بك
@@ -10,11 +15,6 @@ def save_to_gsheet(sheet_name, data_list):
     except Exception as e:
         st.error(f"خطأ في الاتصال: {e}")
         return False
-import streamlit as st
-import pandas as pd
-from datetime import datetime, timedelta
-import re
-from fpdf import FPDF
 
 # --- 1. إعدادات الصفحة ---
 st.set_page_config(page_title="Healthy Water Pro - Level الوحش", layout="wide")
@@ -99,7 +99,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد (الحل النهائي لتضارب التواريخ) ---
+# --- 4. تحميل البيانات ومعالجة المواعيد ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -108,24 +108,13 @@ df_exp = load_all_data("288947510")
 last_v_info = {}
 
 if not df_m.empty:
-    # 1. تنظيف الأسماء
     df_m['name'] = df_m['name'].astype(str).str.strip()
-    
-    # 2. تحويل التاريخ مع إجبار الكود على فهم كل الصيغ الممكنة
-    # السطر ده هيحاول يقرأ التاريخ سواء كان (يوم-شهر) أو (سنة-شهر) بشكل ذكي
-    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', fuzzy=True)
-    
-    # 3. ترتيب البيانات بناءً على التاريخ المحول (الأحدث يكون في الأسفل)
+    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
     df_m = df_m.sort_values(by='v_date_dt', ascending=True)
-    
-    # 4. بناء القاموس لآخر زيارة لكل اسم
     for name in df_m['name'].unique():
-        # بنفلتر سجل العميل وبنشيل أي صفوف مفيهاش تاريخ صحيح
         user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
         if not user_history.empty:
-            # iloc[-1] بتضمن لنا الحصول على آخر صف في الجدول المرتب زمنياً
             last_v_info[name] = user_history.iloc[-1].to_dict()
-
 
 if 'auth' not in st.session_state: st.session_state.auth = None
 if not st.session_state.auth:
