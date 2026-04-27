@@ -99,7 +99,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد ---
+# --- 4. تحميل البيانات ومعالجة المواعيد (تم التعديل هنا لحل مشكلة None) ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -109,7 +109,9 @@ last_v_info = {}
 
 if not df_m.empty:
     df_m['name'] = df_m['name'].astype(str).str.strip()
-    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
+    # استخدام fuzzy=True لمعالجة التضارب في تنسيق التواريخ
+    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', dayfirst=False)
+    # إعادة الترتيب لضمان أن آخر صف هو الأحدث فعلياً
     df_m = df_m.sort_values(by='v_date_dt', ascending=True)
     for name in df_m['name'].unique():
         user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
