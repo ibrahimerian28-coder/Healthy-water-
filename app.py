@@ -101,7 +101,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد (تم تحسين المنطق هنا) ---
+# --- 4. تحميل البيانات ومعالجة المواعيد (تم تحديث معالج التاريخ لضمان التشغيل) ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -113,18 +113,24 @@ if not df_m.empty:
     df_m['name'] = df_m['name'].astype(str).str.strip()
     df_c['name'] = df_c['name'].astype(str).str.strip()
     
-    # تحويل التواريخ بشكل أكثر ذكاءً
-    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', dayfirst=True)
-    # ترتيب لضمان أخذ آخر زيارة فعلياً
+    # تحويل التواريخ مع تجربة أكتر من تنسيق
+    def parse_date(val):
+        if not val or str(val).strip() == "": return pd.NaT
+        formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']
+        for fmt in formats:
+            try: return pd.to_datetime(val, format=fmt)
+            except: continue
+        return pd.to_datetime(val, errors='coerce')
+
+    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_date)
     df_m = df_m.sort_values(by='v_date_dt', ascending=True)
     
     for name in df_m['name'].unique():
         user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
         if not user_history.empty:
             last_row = user_history.iloc[-1].to_dict()
-            # معالجة التاريخ الاستثنائي
             s_val = str(last_row.get('special_date', "")).strip()
-            last_row['spec_dt_clean'] = pd.to_datetime(s_val, errors='coerce', dayfirst=True)
+            last_row['spec_dt_clean'] = parse_date(s_val)
             last_v_info[name] = last_row
 
 if 'auth' not in st.session_state: st.session_state.auth = None
@@ -151,7 +157,6 @@ if menu == "بيانات العملاء":
         next_d, last_visit_date = None, None
         
         if last_v:
-            # التأكد من تحويل التاريخ لكائن تاريخ بايثون للمقارنة
             if pd.notnull(last_v['v_date_dt']):
                 last_visit_date = last_v['v_date_dt'].date()
             
