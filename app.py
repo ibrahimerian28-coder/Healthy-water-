@@ -101,7 +101,7 @@ def generate_safe_pdf(row, df_m):
         pdf.ln(); fill = not fill
     return bytes(pdf.output())
 
-# --- 4. تحميل البيانات ومعالجة المواعيد (تم تحديث معالج التاريخ لضمان التشغيل) ---
+# --- 4. تحميل البيانات ومعالجة المواعيد (تم ضبط التنسيق 2026-01-25) ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
@@ -110,23 +110,26 @@ df_exp = load_all_data("288947510")
 last_v_info = {}
 
 if not df_m.empty:
+    # تنظيف الأسماء لضمان المطابقة
     df_m['name'] = df_m['name'].astype(str).str.strip()
     df_c['name'] = df_c['name'].astype(str).str.strip()
     
-    # تحويل التواريخ مع تجربة أكتر من تنسيق
+    # دالة معالجة التواريخ المحسنة بناءً على التنسيق المذكور
     def parse_date(val):
-        if not val or str(val).strip() == "": return pd.NaT
-        formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']
-        for fmt in formats:
+        val = str(val).strip()
+        if not val or val == "" or val == "nan": return pd.NaT
+        # تجربة التنسيق الأساسي 2026-01-25 أولاً
+        for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
             try: return pd.to_datetime(val, format=fmt)
             except: continue
         return pd.to_datetime(val, errors='coerce')
 
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_date)
-    df_m = df_m.sort_values(by='v_date_dt', ascending=True)
+    # الفلترة لإزالة القيم الفارغة قبل الترتيب
+    valid_m = df_m.dropna(subset=['v_date_dt']).sort_values(by='v_date_dt', ascending=True)
     
-    for name in df_m['name'].unique():
-        user_history = df_m[df_m['name'] == name].dropna(subset=['v_date_dt'])
+    for name in valid_m['name'].unique():
+        user_history = valid_m[valid_m['name'] == name]
         if not user_history.empty:
             last_row = user_history.iloc[-1].to_dict()
             s_val = str(last_row.get('special_date', "")).strip()
@@ -149,7 +152,7 @@ menu = st.sidebar.radio("التحكم:", ["بيانات العملاء", "جدو
 if menu == "بيانات العملاء":
     st.header("📋 سجل العملاء")
     search = st.text_input("ابحث عن عميل بالاسم أو المنطقة...")
-    filtered_df = df_c[df_c['name'].str.contains(search) | df_c['area'].str.contains(search)] if search else df_c
+    filtered_df = df_c[df_c['name'].str.contains(search, na=False) | df_c['area'].str.contains(search, na=False)] if search else df_c
 
     for idx, r in filtered_df.iterrows():
         name = r['name']
@@ -205,57 +208,30 @@ if menu == "بيانات العملاء":
                         """, unsafe_allow_html=True)
                 
                 st.write("---")
-                col_btn1, col_btn2 = st.columns(2)
-                if col_btn1.button("✏️ تعديل بيانات العميل", key=f"edit_cust_{idx}"):
-                    st.info("سيتم فتح واجهة التعديل قريباً")
-                
-                if col_btn2.button("🗑️ حذف العميل", key=f"del_cust_{idx}"):
-                    st.error(f"⚠️ هل أنت متأكد من حذف العميل {name} نهائياً؟")
-                    if st.button("نعم، احذف العميل الآن", key=f"conf_del_cust_{idx}"):
-                        if execute_gsheet_action("delete", "Customers", row_index=idx+2):
-                            st.success("تم حذف العميل")
-                            st.cache_data.clear()
-                            st.rerun()
+                if st.button("🗑️ حذف العميل", key=f"del_cust_{idx}"):
+                    st.error(f"⚠️ هل أنت متأكد من حذف العميل {name}؟")
+                    if st.button("نعم، احذف", key=f"conf_del_cust_{idx}"):
+                        execute_gsheet_action("delete", "Customers", row_index=idx+2)
+                        st.cache_data.clear()
+                        st.rerun()
 
             with c2:
-                history = df_m[df_m['name'] == name].copy().sort_values(by='v_date_dt', ascending=False)
+                history = df_m[df_m['name'] == name].copy()
+                history['v_date_dt'] = history['visit_date'].apply(parse_date)
+                history = history.sort_values(by='v_date_dt', ascending=False)
+                
                 if not history.empty:
                     st.write("**سجل الزيارات (الأحدث أولاً):**")
-                    h_display = history[['visit_date','P1','P2','P3','membrane','post_carbon','Calcite','infrared','amount','notes']].head(10).copy()
-                    
-                    for h_idx, h_row in h_display.iterrows():
-                        parts = []
-                        if format_to_check(h_row['P1']) == "✅": parts.append("P1")
-                        if format_to_check(h_row['P2']) == "✅": parts.append("P2")
-                        if format_to_check(h_row['P3']) == "✅": parts.append("P3")
-                        if format_to_check(h_row['membrane']) == "✅": parts.append("Mem")
-                        if format_to_check(h_row['post_carbon']) == "✅": parts.append("Post")
-                        if format_to_check(h_row['Calcite']) == "✅": parts.append("Calc")
-                        if format_to_check(h_row['infrared']) == "✅": parts.append("Infra")
-                        
+                    for h_idx, h_row in history.head(10).iterrows():
+                        parts = [p for p in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared'] if format_to_check(h_row[p]) == "✅"]
                         shamaat_text = " | ".join(parts) if parts else "لم يتم تغيير شمعات"
                         
                         st.markdown(f"""
                         <div style="background:#f9f9f9; padding:10px; border-radius:5px; margin-bottom:10px; border-left:5px solid #007bff; font-size:13px;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <b>📅 {h_row['visit_date']}</b>
-                                <b style="color:green;">💰 {h_row['amount']} ج.م</b>
-                            </div>
-                            <div style="margin-top:5px; color:#555;">🛠️ {shamaat_text}</div>
-                            {f'<div style="margin-top:3px; font-style:italic; color:#888;">📝 {h_row["notes"]}</div>' if h_row["notes"] else ""}
+                            <b>📅 {h_row['visit_date']}</b> | <b style="color:green;">💰 {h_row['amount']} ج.م</b><br>
+                            🛠️ {shamaat_text}
                         </div>
                         """, unsafe_allow_html=True)
-                        
-                        btn_c1, btn_c2 = st.columns(2)
-                        if btn_c1.button("🖋️ تعديل", key=f"ed_v_{h_idx}"):
-                             st.info("تعديل الزيارة...")
-                        if btn_c2.button("🗑️ حذف", key=f"del_v_{h_idx}"):
-                            st.error(f"تأكيد: حذف زيارة يوم {h_row['visit_date']}؟")
-                            if st.button("نعم، احذف الزيارة", key=f"conf_del_v_{h_idx}"):
-                                if execute_gsheet_action("delete", "Maintenance", row_index=h_idx+2):
-                                    st.success("تم الحذف")
-                                    st.cache_data.clear()
-                                    st.rerun()
                     
                     st.download_button("📥 تحميل PDF", generate_safe_pdf(r, df_m), f"{name}.pdf", key=f"pdf_down_{idx}")
 
@@ -290,8 +266,6 @@ elif menu == "جدول المواعيد":
                 for _, row in day_res.iterrows():
                     st.markdown(f"🔹 **[{row['name']}](بيانات_العملاء#{row['name'].replace(' ','_')})** | 📍 {row['area']}")
             else: st.write(":grey[لا توجد مواعيد]")
-    else:
-        st.write("لا توجد بيانات مواعيد حالياً.")
 
 elif menu == "تسجيل صيانة 🔧":
     st.header("🔧 تسجيل زيارة صيانة")
@@ -312,13 +286,10 @@ elif menu == "تسجيل صيانة 🔧":
         notes = st.text_area("ملاحظات الزيارة")
         if st.form_submit_button("حفظ البيانات"):
             new_data = [name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_item, amount, notes, str(s_date) if s_date else "", ""]
-            with st.spinner("جاري الحفظ..."):
-                if execute_gsheet_action("append", "Maintenance", data=new_data):
-                    st.success("تم الحفظ بنجاح ✅")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("فشل الحفظ.")
+            if execute_gsheet_action("append", "Maintenance", data=new_data):
+                st.success("تم الحفظ بنجاح ✅")
+                st.cache_data.clear()
+                st.rerun()
 
 elif menu == "المصروفات والحسابات 💸":
     st.header("💸 سجل المصروفات")
@@ -329,14 +300,11 @@ elif menu == "المصروفات والحسابات 💸":
         sund = col_e2.number_input("نثريات", min_value=0.0)
         mon_exp = col_e1.number_input("مصروفات شهرية", min_value=0.0)
         sal = col_e2.number_input("رواتب", min_value=0.0)
-        if st.form_submit_button("حفظ المصروف"):
-            exp_data = [str(e_date), trans, sund, mon_exp, sal]
-            if execute_gsheet_action("append", "Expenses", data=exp_data):
+        if st.form_submit_button("حفظ"):
+            if execute_gsheet_action("append", "Expenses", data=[str(e_date), trans, sund, mon_exp, sal]):
                 st.success("تم الحفظ")
                 st.cache_data.clear()
-    st.write("---")
     if not df_exp.empty:
-        df_exp['total'] = df_exp['transportation'] + df_exp['sundries'] + df_exp['monthly_expensess'] + df_exp['salaries']
         st.dataframe(df_exp, use_container_width=True)
 
 elif menu == "الأرباح 📈":
@@ -354,24 +322,22 @@ elif menu == "إضافة عميل جديد":
     st.header("➕ تسجيل عميل جديد")
     with st.form("add_full_cust"):
         c_name = st.text_input("الاسم الكامل")
-        c_phone = st.text_input("الموبايل الأساسي")
+        c_phone = st.text_input("الموبايل")
         c_area = st.text_input("المنطقة")
-        c_address = st.text_input("العنوان بالتفصيل")
+        c_address = st.text_input("العنوان")
         c_setup = st.date_input("تاريخ التركيب")
         c_cycle = st.number_input("دورة الصيانة (شهور)", value=3)
         c_status = st.selectbox("الحالة", ["نشط", "راكد"])
-        if st.form_submit_button("إضافة العميل"):
-            new_cust = [c_name, c_phone, c_area, c_address, str(c_setup), c_cycle, c_status]
-            if execute_gsheet_action("append", "Customers", data=new_cust):
-                st.success("تم إضافة العميل بنجاح")
+        if st.form_submit_button("إضافة"):
+            if execute_gsheet_action("append", "Customers", data=[c_name, c_phone, c_area, c_address, str(c_setup), c_cycle, c_status]):
+                st.success("تم إضافة العميل")
                 st.cache_data.clear()
 
 elif menu == "المخزن 📦":
-    st.header("📦 إدارة المخزن")
-    if not df_inv.empty: st.dataframe(df_inv, use_container_width=True)
+    st.header("📦 المخزن")
+    st.dataframe(df_inv, use_container_width=True)
 
 elif menu == "الاحتياجات ⚠️":
-    st.header("⚠️ نواقص المخزن")
-    if not df_inv.empty:
-        shortage = df_inv[df_inv['quantity'] <= df_inv['min_limit']]
-        st.table(shortage[['item_name', 'quantity', 'min_limit']])
+    st.header("⚠️ النواقص")
+    shortage = df_inv[df_inv['quantity'] <= df_inv['min_limit']]
+    st.table(shortage[['item_name', 'quantity', 'min_limit']])
