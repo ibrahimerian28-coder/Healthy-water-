@@ -31,7 +31,7 @@ def get_arabic_day(date_obj):
     }
     return days.get(date_obj.strftime('%A'), date_obj.strftime('%A'))
 
-@st.cache_data(ttl=60) 
+@st.cache_data(ttl=5) 
 def load_all_data(gid):
     url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
     try:
