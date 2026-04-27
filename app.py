@@ -105,26 +105,33 @@ df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
 df_exp = load_all_data("288947510")
 
-# --- 4. تحميل البيانات ومعالجة المواعيد (النسخة المصلحة) ---
+# --- 4. تحميل البيانات ومعالجة المواعيد (النسخة النهائية المصلحة) ---
 df_c = load_all_data("0")
 df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
 df_exp = load_all_data("288947510")
 
+last_v_info = {}
+
 if not df_m.empty:
-    # تحويل التاريخ مع السماح بتنسيقات مختلفة (يوم-شهر-سنة أو سنة-شهر-يوم)
-    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce', dayfirst=False)
-    
-    # إصلاح مشكلة الأسماء: مسح أي مسافات مخفية قد تأتي من الإكسيل
+    # 1. تنظيف الأسماء من أي مسافات مخفية لضمان الربط
     df_m['name'] = df_m['name'].astype(str).str.strip()
     
-    # ترتيب البيانات لضمان أن آخر زيارة هي الأحدث فعلياً
+    # 2. تحويل التاريخ مع معالجة الأخطاء (errors='coerce' تحول أي خطأ لـ NaT)
+    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
+    
+    # 3. حذف أي صفوف فشل تحويل تاريخها (لحماية الحسابات)
+    df_m = df_m.dropna(subset=['v_date_dt'])
+    
+    # 4. ترتيب البيانات: من الأقدم للأحدث بناءً على الاسم والتاريخ
     df_m = df_m.sort_values(by=['name', 'v_date_dt'], ascending=[True, True])
     
-    # نأخذ آخر زيارة لكل اسم
-    last_v_info = df_m.dropna(subset=['v_date_dt']).groupby('name').last().to_dict('index')
-else:
-    last_v_info = {}
+    # 5. استخراج "آخر زيارة" لكل عميل بشكل دقيق
+    # نقوم بتجميع البيانات بالاسم ونأخذ الصف الأخير (أحدث تاريخ)
+    last_v_info = df_m.groupby('name').last().to_dict('index')
+
+# ملاحظة: الآن أصبح لدينا قاموس (last_v_info) يحتوي على أحدث البيانات لكل اسم
+
 
 
 if 'auth' not in st.session_state: st.session_state.auth = None
