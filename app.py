@@ -5,15 +5,10 @@ from datetime import datetime, timedelta
 import re
 from fpdf import FPDF
 
-# --- دالة التنفيذ المركزية (حذف/تعديل/إضافة) لربط كل الصفحات بالاكسيل ---
+# --- 1. دالة التنفيذ المركزية لربط الإكسيل ---
 def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
-    url = "https://script.google.com/macros/s/AKfycbxfVHx-0xlBE64oIS8DzQ0SXaw8AFXThOUQLiFEyqWcoEWGhgmbW6UAIakuZYiU6T8TaA/exec"
-    payload = {
-        "action": action,
-        "sheet": sheet_name,
-        "data": data,
-        "row_index": row_index
-    }
+    url = "https://script.google.com/macros/s/AKfycbwyCuybxsP72RoNybypMcBQuGl8OJIDuwZBXcuw5Tx2KCgodVn751UEqkqLYsvTVn3oXg/exec"
+    payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
     try:
         response = requests.post(url, json=payload)
         return response.status_code == 200
@@ -21,14 +16,11 @@ def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
         st.error(f"خطأ في التنفيذ: {e}")
         return False
 
-# --- 1. إعدادات الصفحة ---
-st.set_page_config(page_title="Healthy Water Pro - Level الوحش", layout="wide")
+# --- 2. إعدادات الصفحة والوظائف المساعدة ---
+st.set_page_config(page_title="Healthy Water Pro - Admin", layout="wide")
 
 def get_arabic_day(date_obj):
-    days = {
-        'Monday': 'الاثنين', 'Tuesday': 'الثلاثاء', 'Wednesday': 'الأربعاء',
-        'Thursday': 'الخميس', 'Friday': 'الجمعة', 'Saturday': 'السبت', 'Sunday': 'الأحد'
-    }
+    days = {'Monday': 'الاثنين', 'Tuesday': 'الثلاثاء', 'Wednesday': 'الأربعاء', 'Thursday': 'الخميس', 'Friday': 'الجمعة', 'Saturday': 'السبت', 'Sunday': 'الأحد'}
     return days.get(date_obj.strftime('%A'), date_obj.strftime('%A'))
 
 @st.cache_data(ttl=2) 
@@ -37,12 +29,7 @@ def load_all_data(gid):
     try:
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
-        if 'name' in df.columns:
-            df['name'] = df['name'].astype(str).str.strip()
-        num_cols = ['quantity', 'unit_price', 'min_limit', 'transportation', 'sundries', 'monthly_expensess', 'salaries', 'amount', 'maintenance_cycle']
-        for col in num_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        if 'name' in df.columns: df['name'] = df['name'].astype(str).str.strip()
         return df.fillna("") 
     except: return pd.DataFrame()
 
@@ -51,54 +38,101 @@ def format_to_check(val):
     return "✅" if v in ['true', '1', 'checked', 'تم', 'yes', '✓'] else "❌"
 
 def clean_text_for_pdf(text):
-    if not text: return ""
+    if not text or text == "nan": return "-"
     return "".join(i for i in str(text) if ord(i) < 128)
 
 def get_status_color(next_date, status):
     if str(status).strip() == "راكد": return "#808080"
     if not next_date or pd.isnull(next_date): return "#f0f2f6"
-    if isinstance(next_date, datetime): next_date = next_date.date()
     today = datetime.now().date()
     diff = (next_date - today).days
     if diff < 0: return "#dc3545" 
     elif 0 <= diff <= 7: return "#ffc107" 
     else: return "#28a745" 
 
+def parse_date(val):
+    val = str(val).strip()
+    if not val or val in ["", "nan"]: return pd.NaT
+    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+        try: return pd.to_datetime(val, format=fmt)
+        except: continue
+    return pd.to_datetime(val, errors='coerce')
+
+# --- 3. كلاس الـ PDF المطور (مع الشعار والفوتر) ---
 class HealthyPDF(FPDF):
     def header(self):
-        try: self.image("logo.png", 10, 8, 50)
-        except: pass
-        self.set_font('Arial', 'B', 14)
-        self.cell(0, 10, 'Service Report - Healthy Water', 0, 1, 'R')
-        self.ln(10)
+        try:
+            # شعار الشركة في المنتصف بحجم كبير
+            self.image("logo.png", x=110, y=8, w=80) 
+        except:
+            self.set_font('Arial', 'B', 25)
+            self.set_text_color(40, 116, 166)
+            self.cell(0, 20, 'HEALTHY WATER', 0, 1, 'C')
+        self.ln(25)
+
     def footer(self):
-        self.set_y(-15)
-        self.set_font('Arial', 'I', 10)
-        self.cell(0, 10, 'Healthy Water Company - Support: 01286609535', 0, 0, 'C')
+        self.set_y(-20)
+        self.set_font('Arial', 'B', 12)
+        self.set_text_color(100, 100, 100)
+        self.line(10, self.get_y(), 287, self.get_y())
+        self.ln(2)
+        self.cell(0, 10, 'Technical Support & Maintenance: 01286609535', 0, 0, 'C')
+        self.set_x(-20)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'R')
 
 def generate_safe_pdf(row, df_m):
     pdf = HealthyPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
-    pdf.set_font("Arial", 'B', 14)
-    pdf.cell(0, 10, f"Customer: {clean_text_for_pdf(row['name'])}", ln=True)
+    
+    pdf.set_font("Arial", 'B', 18)
+    pdf.set_text_color(0, 0, 0)
+    customer_name = clean_text_for_pdf(row['name'])
+    pdf.cell(0, 15, f"Service History Report: {customer_name}", ln=True, align='L')
+    
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(0, 8, f"Area: {clean_text_for_pdf(row.get('area',''))} | Installation Date: {row.get('setup_date','')}", ln=True)
     pdf.ln(5)
-    headers = ["Date", "P1", "P2", "P3", "Mem", "Post", "Calc", "Infra", "Cost"]
-    pdf.set_fill_color(40, 116, 166); pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", 'B', 11)
-    for h in headers: pdf.cell(31, 10, h, 1, 0, 'C', True)
+    
+    headers = ["Date", "P1", "P2", "P3", "Mem", "Post", "Calc", "Infra", "Other Parts", "Cost", "Notes"]
+    col_widths = [25, 12, 12, 12, 12, 12, 12, 12, 40, 20, 100]
+    
+    pdf.set_fill_color(40, 116, 166)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Arial", 'B', 10)
+    
+    for i, h in enumerate(headers):
+        pdf.cell(col_widths[i], 12, h, 1, 0, 'C', True)
     pdf.ln()
-    pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", '', 11)
+    
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", '', 10)
+    
     history = df_m[df_m['name'] == row['name']].copy()
+    history['v_date_dt'] = history['visit_date'].apply(parse_date)
+    history = history.sort_values(by='v_date_dt', ascending=False)
+    
     fill = False
-    for _, m in history.tail(10).iterrows():
-        pdf.set_fill_color(240, 240, 240) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(31, 10, str(m.get('visit_date',''))[:10], 1, 0, 'C', True)
+    for _, m in history.iterrows():
+        pdf.set_fill_color(245, 247, 249) if fill else pdf.set_fill_color(255, 255, 255)
+        pdf.cell(col_widths[0], 10, str(m.get('visit_date',''))[:10], 1, 0, 'C', True)
+        
         for f in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
             is_checked = format_to_check(m.get(f,'')) == "✅"
-            if is_checked:
-                pdf.set_font('ZapfDingbats', '', 11); pdf.cell(31, 10, '4', 1, 0, 'C', True); pdf.set_font('Arial', '', 11)
-            else: pdf.cell(31, 10, "-", 1, 0, 'C', True)
-        pdf.cell(31, 10, str(m.get('amount','0')), 1, 0, 'C', True)
-        pdf.ln(); fill = not fill
+            val = "YES" if is_checked else "-"
+            if is_checked: pdf.set_text_color(40, 167, 69)
+            pdf.cell(12, 10, val, 1, 0, 'C', True)
+            pdf.set_text_color(0, 0, 0)
+            
+        pdf.cell(col_widths[8], 10, clean_text_for_pdf(str(m.get('other_item', '-'))), 1, 0, 'C', True)
+        pdf.cell(col_widths[9], 10, str(m.get('amount','0')), 1, 0, 'C', True)
+        
+        note_text = clean_text_for_pdf(str(m.get('notes', '-')))
+        if len(note_text) > 55: note_text = note_text[:52] + "..."
+        pdf.cell(col_widths[10], 10, note_text, 1, 0, 'L', True)
+        pdf.ln()
+        fill = not fill
+        
     return bytes(pdf.output())
 
 # --- 4. تحميل البيانات ومعالجة المواعيد ---
@@ -107,27 +141,19 @@ df_m = load_all_data("2120582392")
 df_inv = load_all_data("1767710106")
 df_exp = load_all_data("288947510")
 
+available_areas = sorted(list(set(df_c['area'].astype(str).unique()))) if not df_c.empty else []
+
 last_v_info = {}
-
-def parse_date(val):
-    val = str(val).strip()
-    if not val or val == "" or val == "nan": return pd.NaT
-    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-        try: return pd.to_datetime(val, format=fmt)
-        except: continue
-    return pd.to_datetime(val, errors='coerce')
-
 if not df_m.empty:
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_date)
-    valid_m = df_m.dropna(subset=['v_date_dt']).sort_values(by='v_date_dt', ascending=True)
+    valid_m = df_m.dropna(subset=['v_date_dt']).sort_values(by='v_date_dt')
     for name in valid_m['name'].unique():
-        user_history = valid_m[valid_m['name'] == name]
-        if not user_history.empty:
-            last_row = user_history.iloc[-1].to_dict()
-            s_val = str(last_row.get('special_date', "")).strip()
-            last_row['spec_dt_clean'] = parse_date(s_val)
-            last_v_info[name] = last_row
+        user_h = valid_m[valid_m['name'] == name]
+        last_row = user_h.iloc[-1].to_dict()
+        last_row['spec_dt_clean'] = parse_date(last_row.get('special_date', ""))
+        last_v_info[name] = last_row
 
+# --- 5. نظام تسجيل الدخول ---
 if 'auth' not in st.session_state: st.session_state.auth = None
 if not st.session_state.auth:
     st.title("💧 Healthy Water Management")
@@ -137,94 +163,76 @@ if not st.session_state.auth:
         else: st.error("الباسورد غلط!")
     st.stop()
 
-menu = st.sidebar.radio("التحكم:", ["بيانات العملاء", "جدول المواعيد", "المخزن 📦", "الاحتياجات ⚠️", "تسجيل صيانة 🔧", "المصروفات والحسابات 💸", "الأرباح 📈", "إضافة عميل جديد"])
+menu = st.sidebar.radio("التحكم:", ["بيانات العملاء", "جدول المواعيد", "المخزن 📦", "الاحتياجات ⚠️", "تسجيل صيانة 🔧", "المصروفات والحسابات 💸", "إضافة عميل جديد"])
 
-# --- 5. الصفحات ---
-
+# --- صفحة بيانات العملاء ---
 if menu == "بيانات العملاء":
-    st.header("📋 سجل العملاء وإدارة البيانات")
-    search = st.text_input("ابحث عن عميل بالاسم أو المنطقة...")
-    filtered_df = df_c[df_c['name'].str.contains(search, na=False) | df_c['area'].str.contains(search, na=False)] if search else df_c
+    st.header("📋 سجل العملاء")
+    search = st.text_input("ابحث بالاسم أو المنطقة...")
+    filtered = df_c[df_c['name'].str.contains(search, na=False) | df_c['area'].str.contains(search, na=False)] if search else df_c
 
-    for idx, r in filtered_df.iterrows():
+    for idx, r in filtered.iterrows():
         name = r['name']
         last_v = last_v_info.get(name, {})
-        next_d, last_visit_date = None, None
+        next_main, next_spec = None, None
         
-        if last_v:
-            if pd.notnull(last_v['v_date_dt']):
-                last_visit_date = last_v['v_date_dt'].date()
-            spec_dt = last_v.get('spec_dt_clean')
-            if pd.notnull(spec_dt):
-                next_d = spec_dt.date()
-            elif last_visit_date:
-                try: cycle = int(float(str(r.get('maintenance_cycle', 3)).strip()))
-                except: cycle = 3
-                next_d = last_visit_date + timedelta(days=cycle * 30)
+        if last_v and pd.notnull(last_v['v_date_dt']):
+            try: cycle = int(float(str(r.get('maintenance_cycle', 3))))
+            except: cycle = 3
+            next_main = (last_v['v_date_dt'] + timedelta(days=cycle * 30)).date()
+            if pd.notnull(last_v.get('spec_dt_clean')):
+                next_spec = last_v['spec_dt_clean'].date()
 
-        status_color = get_status_color(next_d, r.get('status', ''))
-        anchor_name = name.replace(" ", "_")
-        st.markdown(f'<div id="{anchor_name}"></div>', unsafe_allow_html=True)
+        display_date = next_spec if next_spec else next_main
+        status_color = get_status_color(display_date, r.get('status', ''))
         
         st.markdown(f"""
-            <div style="padding:12px; border-radius:8px; margin-bottom:10px; background-color:#ffffff; border-right:15px solid {status_color}; border-left:1px solid #ddd; border-top:1px solid #ddd; border-bottom:1px solid #ddd; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
-                <h4 style="margin:0; color:#333;">👤 {name} 
-                <span style="font-size:12px; color:red;">{" (استثنائي: " + str(next_d) + ")" if next_d and pd.notnull(last_v.get('spec_dt_clean')) else ""}</span></h4>
-                <p style="margin:0; font-size:14px; color:#666;">📍 {r.get('area','')} | 📞 {r.get('phone','')} | الموعد القادم: <b>{next_d if next_d else 'غير محدد'}</b></p>
+            <div style="padding:10px; border-radius:8px; margin-bottom:10px; background-color:#ffffff; border-right:12px solid {status_color}; border-left:1px solid #ddd; border-top:1px solid #ddd; border-bottom:1px solid #ddd;">
+                <h4 style="margin:0;">👤 {name} {" <span style='color:red; font-size:12px;'>(موعد استثنائي)</span>" if next_spec else ""}</h4>
+                <p style="margin:0; font-size:13px; color:#666;">📍 {r.get('area','')} | الموعد القادم: <b>{display_date if display_date else 'غير محدد'}</b></p>
             </div>
             """, unsafe_allow_html=True)
         
-        with st.expander("فتح التفاصيل / تعديل / سجل"):
-            c_ed1, c_ed2 = st.columns(2)
-            with c_ed1:
-                st.subheader("📝 تعديل البيانات")
-                new_phone = st.text_input("الموبايل", value=r['phone'], key=f"ph_{idx}")
-                new_area = st.text_input("المنطقة", value=r['area'], key=f"ar_{idx}")
-                new_address = st.text_input("العنوان", value=r['adress'], key=f"adr_{idx}")
-                new_status = st.selectbox("الحالة", ["نشط", "راكد"], index=0 if r['status']=="نشط" else 1, key=f"st_{idx}")
-                if st.button("💾 حفظ التعديلات", key=f"save_c_{idx}"):
-                    updated_data = [name, new_phone, new_area, new_address, r['setup_date'], r['maintenance_cycle'], new_status]
-                    if execute_gsheet_action("update", "Customers", data=updated_data, row_index=idx+2):
-                        st.success("تم التحديث بنجاح")
-                        st.cache_data.clear()
+        with st.expander("تفاصيل التواصل وسجل الصيانة"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**العنوان:** {r.get('adress','')}")
+                if r.get('location') and str(r['location']).startswith("http"):
+                    st.markdown(f"📍 **[فتح الموقع على الخريطة]({r['location']})**")
                 
-                st.write("---")
-                if st.button("🗑️ حذف العميل نهائياً", key=f"del_cust_{idx}"):
-                    st.error(f"⚠️ هل أنت متأكد من حذف {name}؟")
-                    if st.button("نعم، احذف الآن", key=f"conf_del_cust_{idx}"):
-                        execute_gsheet_action("delete", "Customers", row_index=idx+2)
-                        st.cache_data.clear()
-                        st.rerun()
+                # إظهار كافة أرقام الموبايل الأربعة مع أزرار ملونة
+                for p_col in ['phone', 'phone_1', 'phone_2', 'phone_3']:
+                    p_val = str(r.get(p_col, '')).strip()
+                    if p_val and p_val not in ["nan", "", "0"]:
+                        st.markdown(f"""<div style="display:flex; gap:10px; margin-bottom:5px;"><b>📞 {p_val}</b> 
+                        <a href="tel:{p_val}" style="background:#075e54; color:white; padding:2px 8px; border-radius:4px; text-decoration:none; font-size:12px;">اتصال</a>
+                        <a href="https://wa.me/2{p_val}" style="background:#25d366; color:white; padding:2px 8px; border-radius:4px; text-decoration:none; font-size:12px;">واتساب</a></div>""", unsafe_allow_html=True)
 
-            with c_ed2:
-                st.subheader("📜 تاريخ الصيانات")
-                history = df_m[df_m['name'] == name].copy()
-                history['v_date_dt'] = history['visit_date'].apply(parse_date)
-                history = history.sort_values(by='v_date_dt', ascending=False)
-                
+            with col2:
+                st.write("**🛠️ سجل آخر الصيانات:**")
+                history = df_m[df_m['name'] == name].tail(10)
                 if not history.empty:
-                    for h_idx, h_row in history.head(10).iterrows():
-                        parts = [p for p in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared'] if format_to_check(h_row[p]) == "✅"]
-                        shamaat_text = " | ".join(parts) if parts else "لم يتم تغيير شمعات"
-                        st.markdown(f"""<div style="background:#f9f9f9; padding:8px; border-radius:5px; margin-bottom:5px; border-left:4px solid #007bff; font-size:12px;">
-                            📅 <b>{h_row['visit_date']}</b> | 💰 <b>{h_row['amount']} ج.م</b><br>🛠️ {shamaat_text}</div>""", unsafe_allow_html=True)
-                    st.download_button("📥 تحميل PDF", generate_safe_pdf(r, df_m), f"{name}.pdf", key=f"pdf_down_{idx}")
+                    hist_display = history.copy()
+                    for col in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
+                        hist_display[col] = hist_display[col].apply(format_to_check)
+                    st.dataframe(hist_display[['visit_date', 'P1', 'P2', 'P3', 'membrane', 'amount']], hide_index=True)
+                
+                st.download_button("📥 تحميل سجل الصيانة PDF", generate_safe_pdf(r, df_m), f"{name}_Report.pdf", key=f"pdf_{idx}")
 
+# --- صفحة جدول المواعيد ---
 elif menu == "جدول المواعيد":
     st.header("📅 جدول مواعيد الأسبوع")
     today = datetime.now().date()
     sched_list = []
     for _, r in df_c.iterrows():
         lv = last_v_info.get(r['name'], {})
-        nd = None
-        if lv:
-            sd = lv.get('spec_dt_clean')
-            if pd.notnull(sd): nd = sd.date()
-            elif pd.notnull(lv.get('v_date_dt')):
-                try: cycle = int(float(str(r.get('maintenance_cycle', 3)).strip()))
-                except: cycle = 3
-                nd = (lv['v_date_dt'] + timedelta(days=cycle*30)).date()
-            if nd: sched_list.append({'name': r['name'], 'date': nd, 'area': r.get('area','')})
+        if lv and pd.notnull(lv['v_date_dt']):
+            try: cycle = int(float(str(r.get('maintenance_cycle', 3))))
+            except: cycle = 3
+            m_date = (lv['v_date_dt'] + timedelta(days=cycle*30)).date()
+            sched_list.append({'name': r['name'], 'date': m_date, 'area': r['area'], 'type': 'دورية'})
+            if pd.notnull(lv.get('spec_dt_clean')):
+                sched_list.append({'name': r['name'], 'date': lv['spec_dt_clean'].date(), 'area': r['area'], 'type': 'استثنائي'})
     
     if sched_list:
         sdf = pd.DataFrame(sched_list)
@@ -234,103 +242,80 @@ elif menu == "جدول المواعيد":
             day_res = sdf[sdf['date'] == curr]
             if not day_res.empty:
                 for _, row in day_res.iterrows():
-                    st.markdown(f"🔹 **[{row['name']}](بيانات_العملاء#{row['name'].replace(' ','_')})** | 📍 {row['area']}")
+                    color = "red" if row['type'] == 'استثنائي' else "blue"
+                    st.markdown(f"🔹 **{row['name']}** ({row['area']}) - <span style='color:{color};'>{row['type']}</span>", unsafe_allow_html=True)
             else: st.write(":grey[لا توجد مواعيد]")
 
+# --- صفحة المخزن ---
 elif menu == "المخزن 📦":
     st.header("📦 إدارة المخزن")
-    with st.form("new_item_stock"):
-        st.subheader("➕ إضافة صنف جديد للمخزن")
-        c1, c2, c3 = st.columns(3)
-        i_name = c1.text_input("اسم القطعة")
-        i_qty = c2.number_input("الكمية الحالية", min_value=0)
-        i_min = c3.number_input("حد الأمان", min_value=0)
-        if st.form_submit_button("إضافة للمخزن"):
-            if execute_gsheet_action("append", "Inventory", data=[i_name, i_qty, i_min]):
-                st.success("تمت الإضافة"); st.cache_data.clear(); st.rerun()
-    
-    st.write("---")
     for idx, r in df_inv.iterrows():
-        c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
-        c1.write(f"**{r['item_name']}**")
-        new_q = c2.number_input("تعديل الكمية", value=int(r['quantity']), key=f"inv_q_{idx}")
-        if c3.button("تحديث", key=f"inv_up_{idx}"):
+        c1, c2, c3 = st.columns([3, 2, 1])
+        c1.write(f"**{r['item_name']}** (الحالي: {r['quantity']})")
+        new_q = c2.number_input("تعديل الكمية", value=int(r['quantity']), key=f"inv_{idx}")
+        if c3.button("تحديث", key=f"btn_{idx}"):
             if execute_gsheet_action("update", "Inventory", data=[r['item_name'], new_q, r['min_limit']], row_index=idx+2):
-                st.success("تم"); st.cache_data.clear()
-        if c4.button("🗑️", key=f"inv_del_{idx}"):
-            execute_gsheet_action("delete", "Inventory", row_index=idx+2)
-            st.cache_data.clear(); st.rerun()
+                st.success("تم التحديث"); st.cache_data.clear(); st.rerun()
 
 elif menu == "الاحتياجات ⚠️":
-    st.header("⚠️ النواقص")
-    shortage = df_inv[df_inv['quantity'] <= df_inv['min_limit']]
+    st.header("⚠️ نواقص المخزن")
+    shortage = df_inv[df_inv['quantity'].astype(float) <= df_inv['min_limit'].astype(float)]
     st.table(shortage[['item_name', 'quantity', 'min_limit']])
 
+# --- صفحة إضافة عميل جديد ---
+elif menu == "إضافة عميل جديد":
+    st.header("➕ إضافة عميل جديد")
+    with st.form("add_form"):
+        name = st.text_input("اسم العميل")
+        col_p1, col_p2 = st.columns(2)
+        p1 = col_p1.text_input("موبايل 1")
+        p2 = col_p2.text_input("موبايل 2")
+        p3 = col_p1.text_input("موبايل 3")
+        p4 = col_p2.text_input("موبايل 4")
+        
+        area_type = st.selectbox("المنطقة", ["-- اختر --"] + available_areas + ["إضافة منطقة جديدة"])
+        new_area = st.text_input("اسم المنطقة الجديدة") if area_type == "إضافة منطقة جديدة" else ""
+        
+        addr = st.text_input("العنوان بالتفصيل")
+        loc = st.text_input("رابط اللوكيشن (Google Maps)")
+        setup = st.date_input("تاريخ التركيب")
+        cycle = st.number_input("دورة الصيانة (شهور)", value=3)
+        status = st.selectbox("حالة العميل", ["نشط", "راكد"])
+        
+        if st.form_submit_button("حفظ العميل الجديد"):
+            f_area = new_area if area_type == "إضافة منطقة جديدة" else area_type
+            row = [name, p1, p2, p3, p4, f_area, addr, loc, str(setup), cycle, status]
+            if execute_gsheet_action("append", "Customers", data=row):
+                st.success("تمت الإضافة بنجاح ✅"); st.cache_data.clear(); st.rerun()
+
+# --- صفحة تسجيل صيانة ---
 elif menu == "تسجيل صيانة 🔧":
     st.header("🔧 تسجيل زيارة صيانة")
-    with st.form("complete_m_form"):
-        name = st.selectbox("العميل", df_c['name'].tolist() if not df_c.empty else [])
-        col1, col2 = st.columns(2)
-        v_date = col1.date_input("تاريخ الزيارة")
-        s_date = col2.date_input("موعد استثنائي القادم (اختياري)", value=None)
+    with st.form("m_form"):
+        c_name = st.selectbox("اسم العميل", df_c['name'].tolist() if not df_c.empty else [])
+        v_date = st.date_input("تاريخ الزيارة")
+        s_date = st.date_input("موعد استثنائي (اختياري)", value=None)
         st.write("---")
-        st.subheader("الشمعات التي تم تغييرها")
         c1, c2, c3 = st.columns(3)
-        p1 = c1.checkbox("P1"); p2 = c1.checkbox("P2"); p3 = c1.checkbox("P3")
-        mem = c2.checkbox("Membrane"); post = c2.checkbox("Post Carbon")
-        calc = c3.checkbox("Calcite"); infra = c3.checkbox("Infrared")
-        st.write("---")
-        other_item = st.selectbox("إضافة قطعة غيار أخرى", ["لا يوجد"] + (df_inv['item_name'].tolist() if not df_inv.empty else []))
-        amount = st.number_input("المبلغ المحصل", min_value=0.0)
-        notes = st.text_area("ملاحظات الزيارة")
-        if st.form_submit_button("حفظ البيانات"):
-            new_data = [name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_item, amount, notes, str(s_date) if s_date else "", ""]
-            if execute_gsheet_action("append", "Maintenance", data=new_data):
-                st.success("تم الحفظ بنجاح ✅"); st.cache_data.clear(); st.rerun()
+        sh1 = c1.checkbox("P1"); sh2 = c1.checkbox("P2"); sh3 = c1.checkbox("P3")
+        sh4 = c2.checkbox("Membrane"); sh5 = c2.checkbox("Post Carbon")
+        sh6 = c3.checkbox("Calcite"); sh7 = c3.checkbox("Infrared")
+        other = st.text_input("قطع أخرى")
+        price = st.number_input("المبلغ", 0.0)
+        note = st.text_area("ملاحظات")
+        
+        if st.form_submit_button("حفظ الزيارة"):
+            data = [c_name, str(v_date), sh1, sh2, sh3, sh4, sh5, sh6, sh7, other, price, note, str(s_date) if s_date else ""]
+            if execute_gsheet_action("append", "Maintenance", data=data):
+                st.success("تم الحفظ ✅"); st.cache_data.clear(); st.rerun()
 
+# --- المصروفات ---
 elif menu == "المصروفات والحسابات 💸":
-    st.header("💸 سجل المصروفات والحسابات")
-    with st.form("exp_form_full"):
-        e_date = st.date_input("التاريخ")
-        col_e1, col_e2 = st.columns(2)
-        trans = col_e1.number_input("انتقالات", min_value=0.0)
-        sund = col_e2.number_input("نثريات", min_value=0.0)
-        mon_exp = col_e1.number_input("مصروفات شهرية", min_value=0.0)
-        sal = col_e2.number_input("رواتب", min_value=0.0)
-        if st.form_submit_button("حفظ المصروف"):
-            if execute_gsheet_action("append", "Expenses", data=[str(e_date), trans, sund, mon_exp, sal]):
+    st.header("💸 المصروفات")
+    with st.form("exp"):
+        d = st.date_input("التاريخ")
+        t = st.number_input("انتقالات", 0.0); s = st.number_input("نثريات", 0.0)
+        m = st.number_input("مصروف شهري", 0.0); sa = st.number_input("رواتب", 0.0)
+        if st.form_submit_button("حفظ"):
+            if execute_gsheet_action("append", "Expenses", data=[str(d), t, s, m, sa]):
                 st.success("تم الحفظ"); st.cache_data.clear(); st.rerun()
-    
-    st.write("---")
-    if not df_exp.empty:
-        for idx, r in df_exp.iterrows():
-            c_ex1, c_ex2 = st.columns([5, 1])
-            c_ex1.write(f"📅 {r['date']} | انتقالات: {r['transportation']} | نثريات: {r['sundries']} | رواتب: {r['salaries']}")
-            if c_ex2.button("🗑️", key=f"del_exp_{idx}"):
-                execute_gsheet_action("delete", "Expenses", row_index=idx+2)
-                st.cache_data.clear(); st.rerun()
-
-elif menu == "الأرباح 📈":
-    st.header("📈 تقارير الأرباح")
-    if not df_m.empty and not df_exp.empty:
-        df_m['date_only'] = df_m['v_date_dt'].dt.date
-        income = df_m.groupby('date_only')['amount'].sum().reset_index().rename(columns={'date_only':'date', 'amount':'income'})
-        df_exp['date_only'] = pd.to_datetime(df_exp['date'], errors='coerce').dt.date
-        expense = df_exp.groupby('date_only')[['transportation','sundries','monthly_expensess','salaries']].sum().sum(axis=1).reset_index(name='expense')
-        merged = pd.merge(income, expense, on='date', how='outer').fillna(0)
-        merged['profit'] = merged['income'] - merged['expense']
-        st.dataframe(merged.sort_values('date', ascending=False), use_container_width=True)
-
-elif menu == "إضافة عميل جديد":
-    st.header("➕ تسجيل عميل جديد")
-    with st.form("add_full_cust"):
-        c_name = st.text_input("الاسم الكامل")
-        c_phone = st.text_input("الموبايل")
-        c_area = st.text_input("المنطقة")
-        c_address = st.text_input("العنوان")
-        c_setup = st.date_input("تاريخ التركيب")
-        c_cycle = st.number_input("دورة الصيانة (شهور)", value=3)
-        c_status = st.selectbox("الحالة", ["نشط", "راكد"])
-        if st.form_submit_button("إضافة العميل"):
-            if execute_gsheet_action("append", "Customers", data=[c_name, c_phone, c_area, c_address, str(c_setup), c_cycle, c_status]):
-                st.success("تم إضافة العميل بنجاح"); st.cache_data.clear(); st.rerun()
