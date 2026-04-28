@@ -7,7 +7,7 @@ from fpdf import FPDF
 
 # --- دالة التنفيذ المركزية (حذف/تعديل/إضافة) لربط كل الصفحات بالاكسيل ---
 def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
-    url = "https://script.google.com/macros/s/AKfycbwyCuybxsP72RoNybypMcBQuGl8OJIDuwZBXcuw5Tx2KCgodVn751UEqkqLYsvTVn3oXg/exec"
+    url = "https://script.google.com/macros/s/AKfycbxfVHx-0xlBE64oIS8DzQ0SXaw8AFXThOUQLiFEyqWcoEWGhgmbW6UAIakuZYiU6T8TaA/exec"
     payload = {
         "action": action,
         "sheet": sheet_name,
