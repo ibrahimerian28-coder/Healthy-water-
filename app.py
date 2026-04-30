@@ -348,22 +348,8 @@ if st.session_state.user_type == "customer":
                     unsafe_allow_html=True
                 )
                 # --- واجهة الأدمن ---
-if st.session_state.user_type == "admin":
-
-    menu = st.sidebar.radio(
-        "القائمة الرئيسية",
-        [
-            "إضافة عميل جديد",
-            "بيانات العملاء",
-            "جدول المواعيد 📅",
-            "تسجيل صيانة",
-            "المخزن 📦",
-            "الاحتياجات 🚨",
-            "المصروفات",
-            "الأرباح 📈",
-            "إدارة المنتجات ⚙️"
-        ]
-    )
+if st.session_state.role == "admin":
+    menu = st.sidebar.selectbox("القائمة", ["الرئيسية", "بيانات العملاء", "جدول المواعيد", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"])
 
     st.sidebar.divider()
 
@@ -714,15 +700,28 @@ if st.session_state.user_type == "admin":
         start_month = today.replace(day=1)
         
         def calculate_net(start, end):
-            rev = df_m[(df_m['v_date_dt'].dt.date >= start) & (df_m['v_date_dt'].dt.date <= end)]['amount_num'].sum()
-            # المصاريف اليدوية + تكلفة البضاعة (COGS)
-            exp = sum([calculate_day_cogs(d.date()) for d in pd.date_range(start, end)])
+            # 1. حساب الإيرادات مع التأكد من تحويلها لأرقام
+            mask_m = (df_m['v_date_dt'].dt.date >= start) & (df_m['v_date_dt'].dt.date <= end)
+            total_rev = pd.to_numeric(df_m[mask_m]['amount_num'], errors='coerce').sum()
+            
+            # 2. حساب تكلفة البضاعة (COGS) للفترة
+            total_cogs = sum([calculate_day_cogs(d.date()) for d in pd.date_range(start, end)])
+            
+            # 3. حساب المصروفات اليدوية مع التأكد من الأرقام
             manual_exp = 0
             if not df_exp.empty:
-                mask = (df_exp['exp_date_dt'].dt.date >= start) & (df_exp['exp_date_dt'].dt.date <= end)
-                manual_exp = df_exp[mask][['transportation', 'sundries', 'monthly_expensess', 'salaries']].sum().sum()
-            return rev - (exp + manual_exp)
-
+                mask_e = (df_exp['exp_date_dt'].dt.date >= start) & (df_exp['exp_date_dt'].dt.date <= end)
+                cols_to_sum = ['transportation', 'sundries', 'monthly_expensess', 'salaries']
+                
+                # نفلتر الداتا فريم بالتاريخ
+                target_exp = df_exp[mask_e]
+                
+                for col in cols_to_sum:
+                    if col in target_exp.columns:
+                        # تحويل كل عمود لرقم، وأي نص هيتحول لـ 0 عشان ما يضربش الكود
+                        manual_exp += pd.to_numeric(target_exp[col], errors='coerce').fillna(0).sum()
+            
+            return total_rev - (total_cogs + manual_exp)
         # عرض المقاييس
         c1, c2, c3 = st.columns(3)
         c1.metric("صافي أرباح الأسبوع", f"{calculate_net(start_week, today)} ج")
