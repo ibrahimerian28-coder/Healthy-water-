@@ -219,11 +219,15 @@ if st.session_state.user_type is None:
     t1, t2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
 
     with t1:
-        pwd = st.text_input("كلمة السر", type="password")
+        pwd = st.text_input("كلمة السر", type="password", key="admin_pwd_input")
         if st.button("دخول الأدمن"):
             if pwd == ADMIN_PASSWORD:
                 st.session_state.user_type = "admin"
+                st.session_state.role = "admin" # هذا السطر ضروري جداً
+                st.session_state.menu = "الرئيسية"
                 st.rerun()
+            else:
+                st.error("كلمة السر غير صحيحة")
 
     with t2:
         phone_input = st.text_input("رقم الهاتف المسجل")
@@ -363,19 +367,49 @@ if 'menu' not in st.session_state:
     st.session_state.menu = "الرئيسية"
 
 # 2. بناء القائمة الجانبية للأدمن
-if st.session_state.role == "admin":
-    # قائمة الاختيارات - تأكد أن الأسماء مطابقة تماماً للـ elif تحت
-    menu_options = ["الرئيسية", "بيانات العملاء", "جدول المواعيد 📅", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"]
+# --- 6. واجهة الأدمن المنظمة ---
+if st.session_state.user_type == "admin":
+    # قائمة الأدمن الجانبية
+    menu_options = ["الرئيسية", "بيانات العملاء", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️"]
     
-    # تحديد الصفحة الحالية
-    if st.session_state.menu not in menu_options:
+    # التأكد من أن القائمة المختارة موجودة في الخيارات
+    if st.session_state.get('menu') not in menu_options:
         st.session_state.menu = "الرئيسية"
         
-    current_idx = menu_options.index(st.session_state.menu)
-    
-    # عرض القائمة الجانبية وتحديث قيمة menu
-    menu = st.sidebar.selectbox("القائمة 📋", menu_options, index=current_idx)
-    st.session_state.menu = menu # تحديث الحالة فوراً
+    st.sidebar.title("لوحة التحكم")
+    menu = st.sidebar.selectbox("القائمة 📋", menu_options, index=menu_options.index(st.session_state.menu))
+    st.session_state.menu = menu # تحديث الاختيار
+
+    if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
+        st.session_state.user_type = None
+        st.session_state.role = None
+        st.rerun()
+
+    # --- محتوى الصفحات بناءً على اختيار القائمة ---
+    if menu == "الرئيسية":
+        st.header("➕ إضافة عميل جديد")
+        with st.form("add_customer_form"):
+            # (ضع هنا كل محتوى فورم إضافة العميل الموجود في كودك الأصلي)
+            existing_areas = sorted(df_c['area'].unique().tolist()) if not df_c.empty else []
+            default_areas = ["مدينتي", "بدر", "الشروق", "المستقبل", "الرحاب", "مدينة نصر"]
+            areas_list = list(set(existing_areas + default_areas))
+            c1, c2 = st.columns(2)
+            name = c1.text_input("الاسم (name)")
+            phone = c2.text_input("الهاتف الأساسي (phone)")
+            p1 = c1.text_input("هاتف 1"); p2 = c2.text_input("هاتف 2")
+            address = st.text_area("العنوان (adress)")
+            area = st.selectbox("المنطقة", areas_list)
+            new_area = st.text_input("أو أضف منطقة جديدة")
+            final_area = new_area if new_area else area
+            inst_date = st.date_input("تاريخ التركيب")
+            cycle = st.number_input("دورة الصيانة (شهور)", value=3)
+            status = st.selectbox("الحالة", ["نشط", "راكد"])
+            
+            if st.form_submit_button("حفظ العميل"):
+                data = [name, phone, p1, "", "", "", address, final_area, "", str(inst_date), cycle, status]
+                if execute_gsheet_action("append", "Customers", data):
+                    st.success("تم الحفظ بنجاح")
+                    st.rerun()
 
     st.sidebar.divider()
     if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
