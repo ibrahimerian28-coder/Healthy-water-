@@ -6,7 +6,7 @@ from fpdf import FPDF
 import plotly.express as px
 
 # --- 1. الإعدادات والروابط المركزية ---
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxfVHx-0xlBE64oIS8DzQ0SXaw8AFXThOUQLiFEyqWcoEWGhgmbW6UAIakuZYiU6T8TaA/exec"
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
@@ -184,11 +184,29 @@ elif st.session_state.user_type == "admin":
                         st.download_button("تأكيد التحميل", generate_customer_pdf(r, hist), f"{r['name']}.pdf")
                     
                     # أزرار الحذف والتعديل مع تحذير
-                    if col_btn2.button("✏️ تعديل بيانات العميل", key=f"edit_{r['row_index_internal']}"):
-                        st.warning("لتفعيل التعديل، يرجى ربط دالة Update مع Google Script.")
-                    
-                    if col_btn3.button("🗑️ حذف العميل", key=f"del_{r['row_index_internal']}", type="primary"):
-                        st.error("⚠️ تحذير: هل أنت متأكد من الحذف النهائي؟ (يجب ربط زر التأكيد بالسكريبت)")
+                    # زر الحذف مع التأكيد الفعلي
+                    delete_key = f"del_{r['row_index_internal']}"
+                    if delete_key not in st.session_state:
+                        st.session_state[delete_key] = False
+
+                    if col_btn3.button("🗑️ حذف العميل", key=f"btn_{delete_key}", type="primary"):
+                        st.session_state[delete_key] = True
+
+                    if st.session_state[delete_key]:
+                        st.warning(f"⚠️ هل أنت متأكد تماماً من حذف العميل {r['name']}؟")
+                        c_yes, c_no = st.columns(2)
+                        if c_yes.button("✅ نعم، احذف", key=f"yes_{delete_key}"):
+                            # إرسال أمر الحذف لجوجل شيت (نرسل اسم الشيت "العملاء" أو الاسم الانجليزي حسب شيتك مثلا "Customers")
+                            # تأكد من كتابة اسم الشيت الموجود في جوجل حرفياً، هنا افترضنا أنه Customers
+                            success = execute_gsheet_action("delete", "Customers", row_index=r['row_index_internal'])
+                            if success:
+                                st.success("تم الحذف بنجاح! سيتم تحديث الصفحة.")
+                                st.session_state[delete_key] = False
+                                st.rerun()
+                        
+                        if c_no.button("❌ تراجع", key=f"no_{delete_key}"):
+                            st.session_state[delete_key] = False
+                            st.rerun()")
     # 6.2 جدول المواعيد 📅 (مواعيد الأسبوع القادم فقط)
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الأسبوع القادم")
