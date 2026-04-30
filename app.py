@@ -562,8 +562,7 @@ elif st.session_state.user_type == "admin":
             df_all_y = pd.DataFrame(all_years_data)
             st.plotly_chart(px.bar(df_all_y, x="السنة", y="إجمالي الربح", title="مقارنة الأرباح السنوية"))
 
-# هذا الكود يوضع في الجزء المخصص لعرض واجهة العميل بعد التحقق من session_state.user_type == "customer"
-
+# هذا الكود يوضع في الجزء المخصص لعرض واجهة العميل
 if st.session_state.user_type == "customer":
     st.header(f"👋 أهلاً بك")
     
@@ -578,7 +577,7 @@ if st.session_state.user_type == "customer":
             # إطار مميز لكل جهاز
             st.markdown(f"### 🖥️ بيانات الجهاز: {cust['name']}")
             
-            # 1. عرض البيانات الأساسية للعميل
+            # 1. عرض البيانات الأساسية للعميل كما في صفحة بيانات العملاء
             c1, c2, c3 = st.columns(3)
             c1.write(f"📍 **المنطقة:** {cust.get('area', 'غير محدد')}")
             c2.write(f"🏠 **العنوان:** {cust.get('adress', 'غير محدد')}")
@@ -591,34 +590,41 @@ if st.session_state.user_type == "customer":
             st.divider()
 
             # 2. جلب وعرض جدول الصيانات الخاص بهذا الجهاز تحديداً
-            st.subheader(f"🛠️ سجل الصيانات لـ {cust['name']}")
+            st.subheader(f"🛠️ سجل الصيانات والتكاليف")
             
-            # فلترة جدول الصيانات بناءً على اسم العميل (أو المعرف الخاص به)
+            # فلترة جدول الصيانات بناءً على اسم العميل
             cust_hist = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt', ascending=False)
             
             if not cust_hist.empty:
-                # تجهيز الجدول للعرض بشكل جمالي (تحويل القيم لعلامات صح وخطأ)
                 display_hist = cust_hist.copy()
                 check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
                 
+                # تحويل القيم لعلامات صح وخطأ لتسهيل القراءة للعميل
                 for col in check_cols:
                     if col in display_hist.columns:
                         display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
                 
-                # تحديد الأعمدة التي تظهر للعميل (بدون التكلفة مثلاً لخصوصية الإدارة)
-                show_cols = ['visit_date'] + check_cols + ['notes']
-                st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
+                # --- التعديل هنا: إضافة 'amount' لقائمة الأعمدة المعروضة ---
+                # ترتيب الأعمدة: التاريخ، قطع الغيار، المبلغ المدفوع، الملاحظات
+                show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
                 
-                # إتاحة تحميل ملف PDF للصيانة لهذا الجهاز
+                # عرض الجدول مع تسمية الأعمدة بشكل واضح
+                st.dataframe(
+                    display_hist[show_cols].rename(columns={'visit_date': 'تاريخ الزيارة', 'amount': 'المبلغ (ج.م)', 'notes': 'ملاحظات'}),
+                    use_container_width=True, 
+                    hide_index=True
+                )
+                
+                # إتاحة تحميل ملف PDF للصيانة
                 if st.button(f"📄 تحميل تقرير PDF لـ {cust['name']}", key=f"pdf_btn_{cust['row_index_internal']}"):
                     pdf_data = generate_customer_pdf(cust, cust_hist)
                     st.download_button(label="اضغط هنا لبدء التحميل", data=pdf_data, file_name=f"صيانة_{cust['name']}.pdf", mime="application/pdf")
             else:
                 st.warning("لا يوجد سجل صيانات مسجل لهذا الجهاز حتى الآن.")
             
-            st.markdown("---") # فاصل بين الأجهزة المختلفة
+            st.markdown("---") 
 
-    # زر تسجيل الخروج
+    # زر تسجيل الخروج في القائمة الجانبية
     if st.sidebar.button("تسجيل الخروج"):
         st.session_state.user_type = None
         st.session_state.customer_data = None
