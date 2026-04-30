@@ -356,28 +356,37 @@ if 'menu' not in st.session_state:
     st.session_state.menu = "الرئيسية"
 
 # 2. بناء القائمة الجانبية للأدمن
-    if st.session_state.role == "admin":
-        menu_options = ["الرئيسية", "بيانات العملاء", "جدول المواعيد", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"]
+    # 1. التأكد من وجود المتغيرات في الذاكرة (هذا الجزء يمنع الصفحة الفارغة والانهيار)
+if 'role' not in st.session_state:
+    st.session_state.role = None
+if 'menu' not in st.session_state:
+    st.session_state.menu = "الرئيسية"
+
+# 2. بناء القائمة الجانبية للأدمن
+if st.session_state.role == "admin":
+    # قائمة الاختيارات - تأكد أن الأسماء مطابقة تماماً للـ elif تحت
+    menu_options = ["الرئيسية", "بيانات العملاء", "جدول المواعيد 📅", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"]
+    
+    # تحديد الصفحة الحالية
+    if st.session_state.menu not in menu_options:
+        st.session_state.menu = "الرئيسية"
         
-        # استخدام index لضمان بقاء المستخدم في نفس الصفحة عند الـ Refresh
-        current_index = menu_options.index(st.session_state.menu) if st.session_state.menu in menu_options else 0
-        
-        # تحديث الـ session_state بناءً على اختيار المستخدم من القائمة
-        st.session_state.menu = st.sidebar.selectbox("القائمة 📋", menu_options, index=current_index)
-        menu = st.session_state.menu
+    current_idx = menu_options.index(st.session_state.menu)
+    
+    # عرض القائمة الجانبية وتحديث قيمة menu
+    menu = st.sidebar.selectbox("القائمة 📋", menu_options, index=current_idx)
+    st.session_state.menu = menu # تحديث الحالة فوراً
 
-        st.sidebar.divider()
+    st.sidebar.divider()
+    if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
+        st.session_state.role = None
+        st.session_state.menu = "الرئيسية"
+        st.rerun()
+else:
+    # في حالة لم يتم تسجيل الدخول بعد
+    menu = "الرئيسية"
 
-        # زر تسجيل الخروج (تأكد من تصفير الـ role والـ user_type)
-        if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
-            st.session_state.role = None
-            st.session_state.user_type = None
-            st.session_state.menu = "الرئيسية"
-            st.rerun()
-    else:
-        # لو مش أدمن، بنخلي المنيو القيمة الافتراضية عشان الكود اللي تحت ما يضربش
-        menu = st.session_state.menu
-
+# --- بداية عرض محتوى الصفحات (تأكد أن كل سطر يبدأ بمحاذاة صحيحة) ---
     # --- إضافة عميل جديد ---
     if menu == "الرئيسية": # أو حسب اسم الصفحة التي يظهر فيها الفورم
         with st.form("add_customer_form"):
