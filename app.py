@@ -575,7 +575,7 @@ if st.session_state.user_type == "customer":
                 import urllib.parse
 
                 wa_url = f"https://wa.me/2{COMPANY_PHONE}?text={urllib.parse.quote(msg)}"
-                    st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366; color:white; padding:10px; border-radius:5px; text-decoration:none;">تأكيد عبر واتساب ✅</a>', unsafe_allow_html=True)tml=True)
+        st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366; color:white; padding:10px; border-radius:5px; text-decoration:none;">تأكيد عبر واتساب ✅</a>', unsafe_allow_html=True)tml=True)
 
 
 
