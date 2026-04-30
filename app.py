@@ -259,6 +259,33 @@ if st.session_state.user_type == "customer":
                 msg = f"طلب صيانة:\nالاسم: {u_name}\nالهاتف: {cust_phone}\nالمشكلة: {u_problem}"
                 import urllib.parse
                 wa_url = f"https://wa.me/2{COMPANY_PHONE}?text={urllib.parse.quote(msg)}"
+                st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366; color:white; padding:10px; border-radius:5px; text-decoration:none;">تأكيد عبر واتساب ✅</a>', unsafe_allow_html=True)
+    # --- القسم الثاني: المتجر ---
+    elif customer_menu == "المتجر 🛒":
+        st.subheader("🛒 متجر Healthy Water")
+        if df_store.empty:
+            st.info("المتجر فارغ حالياً.")
+        else:
+            # (هنا يوضع كود عرض المنتجات الذي يعمل لديك)
+            st.write("المنتجات المتاحة...")
+
+    # --- القسم الثالث: طلب صيانة ---
+    elif customer_menu == "اطلب صيانة فوراً ⚙️":
+        st.subheader("🛠️ طلب دعم فني سريع")
+        with st.form("cust_urgent_form"):
+            # الآن لن يظهر الخطأ لأن user_devices معرفة في الأعلى
+            default_name = ""
+            if not user_devices.empty:
+                default_name = user_devices.iloc[0]['name']
+            
+            u_name = st.text_input("اسم صاحب الجهاز", value=default_name)
+            u_problem = st.selectbox("نوع المشكلة", ["طلب تغيير شمعات", "تسريب مياه", "عطل في الموتور", "تغير طعم المياه"])
+            u_notes = st.text_area("وصف إضافي")
+            
+            if st.form_submit_button("إرسال الطلب عبر واتساب"):
+                msg = f"طلب صيانة:\nالاسم: {u_name}\nالهاتف: {cust_phone}\nالمشكلة: {u_problem}"
+                import urllib.parse
+                wa_url = f"https://wa.me/2{COMPANY_PHONE}?text={urllib.parse.quote(msg)}"
                 st.markdown(f'<a href="{wa_url}" target="_blank" style="background-color:#25D366; color:white; padding:10px; border-radius:5px; text-decoration:none;">تأكيد عبر واتساب ✅</a>', unsafe_allow_html=True)tml=True)
 
     # 4. الآن تبدأ شروط عرض الصفحات (تأكد أنها تبدأ بعد الزر)
