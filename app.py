@@ -415,7 +415,7 @@ if st.session_state.user_type == "admin":
                     st.success("تم الحفظ بنجاح")
                     st.rerun()
 
-    # --- عرض العملاء ---
+   # --- عرض العملاء ---
     elif menu == "بيانات العملاء":
         st.header("👥 إدارة العملاء")
 
@@ -461,8 +461,8 @@ if st.session_state.user_type == "admin":
 
                         st.dataframe(display[['visit_date'] + check_cols + ['amount']])
 
+                        # تم تعديل هذا الجزء وضبط المسافات وحذف التكرار
                         col_pdf, col_maint = st.columns(2)
-    col_pdf, col_maint = st.columns(2)
                         with col_pdf:
                             if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
                                 pdf_data = generate_customer_pdf(r, cust_hist)
@@ -477,7 +477,6 @@ if st.session_state.user_type == "admin":
                                 st.session_state.target_customer = r['name']
                                 st.query_params["menu"] = "تسجيل صيانة" 
                                 st.rerun()
-            )
                                 # --- جدول المواعيد ---
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
