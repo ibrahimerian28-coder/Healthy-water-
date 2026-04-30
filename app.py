@@ -67,31 +67,25 @@ if not df_exp.empty:
 # --- كلاس مخصص لضمان ظهور الفوتر في كل صفحة تلقائياً ---
 class PDF_Report(FPDF):
     def footer(self):
-        # النزول لأسفل الصفحة بـ 15 ملم
         self.set_y(-15)
-        # إعداد الخط للفوتر
         try:
+            # محاولة استخدام الخط العربي في الفوتر
             self.add_font('ArabicFont', '', "Arial.ttf")
             self.set_font('ArabicFont', '', 11)
+            footer_text = get_display(reshape(f"Healthy Water | للتواصل معنا: {COMPANY_PHONE} 📞 💬"))
         except:
             self.set_font('Arial', 'I', 10)
+            footer_text = f"Healthy Water | Contact: {COMPANY_PHONE}"
         
         self.set_text_color(128, 128, 128)
-        # رسم خط رمادي خفيف فوق الفوتر
         self.set_draw_color(200, 200, 200)
         self.line(10, self.get_y(), 287, self.get_y())
-        
-        # نص الفوتر مع رابط الاتصال
-        # ملاحظة: تم استخدام reshaper و bidi هنا لضمان ظهور العربي في الفوتر
-        footer_text = get_display(reshape(f"Healthy Water | للتواصل معنا: {COMPANY_PHONE} 📞 💬"))
         self.cell(0, 10, footer_text, 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
 
 def generate_customer_pdf(cust_row, history_df):
-    # إنشاء كائن الـ PDF من الكلاس الجديد
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # 1. إعدادات الخطوط
     font_path = os.path.join(os.getcwd(), "Arial.ttf")
     has_arabic = False
     if os.path.exists(font_path):
@@ -105,36 +99,34 @@ def generate_customer_pdf(cust_row, history_df):
         if not has_arabic: return "".join([c for c in str(text) if ord(c) < 128])
         return get_display(reshape(str(text)))
 
-    # --- الهيدر (توزيع العناصر لمنع التداخل) ---
+    # --- الهيدر (اللوجو والعناوين) ---
     
-    # أ. وضع اللوجو بحجم كبير في أعلى اليسار
+    # 1. اللوجو (تكبير للضعف w=90) في أقصى اليسار
     try:
-        # x=240 تجعله يبدأ من اليسار بمسافة كافية، w=45 هو الحجم الكبير
-        pdf.image(LOGO_PATH, x=240, y=10, w=45) 
+        pdf.image(LOGO_PATH, x=197, y=10, w=90) 
     except: pass
 
-    # ب. كتابة العناوين في جهة اليمين (بعيداً عن اللوجو في اليسار)
-    if has_arabic: pdf.set_font('ArabicFont', '', 22)
-    else: pdf.set_font('Arial', 'B', 20)
+    # 2. ضبط العناوين لتبدأ من اليمين فوق الجدول مباشرة
+    if has_arabic: pdf.set_font('ArabicFont', '', 24)
+    else: pdf.set_font('Arial', 'B', 22)
     
-    # محاذاة لليمين 'R' مع ترك مسافة كافية
-    pdf.set_xy(10, 15) 
-    pdf.cell(150, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
+    pdf.set_xy(10, 15) # البدء من الهامش الأيمن (10 ملم)
+    pdf.cell(0, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
     
-    if has_arabic: pdf.set_font('ArabicFont', '', 12)
+    if has_arabic: pdf.set_font('ArabicFont', '', 14)
     else: pdf.set_font('Arial', '', 12)
     
     pdf.set_x(10)
-    pdf.cell(150, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
+    pdf.cell(0, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
     
-    # إزاحة لأسفل لضمان عدم تداخل الجدول مع اللوجو إذا كان كبيراً
-    pdf.ln(25) 
+    pdf.ln(35) # مسافة أمان تحت اللوجو الكبير والعناوين
 
-    # --- إعداد الجدول ---
-    cols = ['ملاحظات', 'المبلغ', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
-    widths = [90, 20, 15, 15, 15, 15, 15, 15, 15, 30]
+    # --- إعداد الجدول (بإضافة خانة القطع الأخرى) ---
+    # الأعمدة الجديدة مع توزيع العرض ليناسب الصفحة (المجموع 277 ملم)
+    cols = ['ملاحظات', 'المبلغ', 'القطع', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
+    widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # تنسيق رأس الجدول (أزرق فاتح)
+    # رأس الجدول
     pdf.set_fill_color(173, 216, 230) 
     if has_arabic: pdf.set_font('ArabicFont', '', 11)
     
@@ -142,21 +134,25 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    # --- محتوى الجدول (صفوف ملونة بالتناوب) ---
+    # --- محتوى الجدول ---
     if has_arabic: pdf.set_font('ArabicFont', '', 10)
     fill = False
     for _, r in history_df.iterrows():
-        # تحديد لون الصف
         pdf.set_fill_color(245, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
         
         pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', fill)
         pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', fill)
         
+        # خانة "القطع الأخرى"
+        other_part = str(r.get('other', ''))
+        pdf.cell(widths[2], 8, format_ar(other_part), 1, 0, 'C', fill)
+        
+        # الشمعات الأساسية
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
             val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C', fill)
             
-        pdf.cell(widths[9], 8, str(r['visit_date']), 1, 1, 'C', fill)
+        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', fill)
         fill = not fill 
 
     return bytes(pdf.output())
