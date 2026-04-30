@@ -356,30 +356,31 @@ if 'menu' not in st.session_state:
     st.session_state.menu = "الرئيسية"
 
 # 2. بناء القائمة الجانبية للأدمن
-if st.session_state.role == "admin":
-    menu_options = ["الرئيسية", "بيانات العملاء", "جدول المواعيد", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"]
-    
-    # استخدام index لضمان بقاء المستخدم في نفس الصفحة عند الـ Refresh
-    current_index = menu_options.index(st.session_state.menu) if st.session_state.menu in menu_options else 0
-    
-    # تحديث الـ session_state بناءً على اختيار المستخدم من القائمة
-    st.session_state.menu = st.sidebar.selectbox("القائمة 📋", menu_options, index=current_index)
-    menu = st.session_state.menu
+    if st.session_state.role == "admin":
+        menu_options = ["الرئيسية", "بيانات العملاء", "جدول المواعيد", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"]
+        
+        # استخدام index لضمان بقاء المستخدم في نفس الصفحة عند الـ Refresh
+        current_index = menu_options.index(st.session_state.menu) if st.session_state.menu in menu_options else 0
+        
+        # تحديث الـ session_state بناءً على اختيار المستخدم من القائمة
+        st.session_state.menu = st.sidebar.selectbox("القائمة 📋", menu_options, index=current_index)
+        menu = st.session_state.menu
 
-    st.sidebar.divider()
+        st.sidebar.divider()
 
-    # زر تسجيل الخروج (تأكد من تصفير الـ role والـ user_type)
-    if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
-        st.session_state.role = None
-        st.session_state.user_type = None
-        st.session_state.menu = "الرئيسية"
-        st.rerun()
-else:
-    # لو مش أدمن، بنخلي المنيو القيمة الافتراضية عشان الكود اللي تحت ما يضربش
-    menu = st.session_state.menu
+        # زر تسجيل الخروج (تأكد من تصفير الـ role والـ user_type)
+        if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
+            st.session_state.role = None
+            st.session_state.user_type = None
+            st.session_state.menu = "الرئيسية"
+            st.rerun()
+    else:
+        # لو مش أدمن، بنخلي المنيو القيمة الافتراضية عشان الكود اللي تحت ما يضربش
+        menu = st.session_state.menu
 
-    with st.form("add_customer_form"):
-
+    # --- إضافة عميل جديد ---
+    if menu == "الرئيسية": # أو حسب اسم الصفحة التي يظهر فيها الفورم
+        with st.form("add_customer_form"):
             existing_areas = sorted(df_c['area'].unique().tolist()) if not df_c.empty else []
             default_areas = ["مدينتي", "بدر", "الشروق", "المستقبل", "الرحاب", "مدينة نصر"]
             areas_list = list(set(existing_areas + default_areas))
@@ -418,7 +419,7 @@ else:
                     st.success("تم الحفظ بنجاح")
                     st.rerun()
 
-   # --- عرض العملاء ---
+    # --- عرض العملاء ---
     elif menu == "بيانات العملاء":
         st.header("👥 إدارة العملاء")
 
@@ -464,7 +465,6 @@ else:
 
                         st.dataframe(display[['visit_date'] + check_cols + ['amount']])
 
-                        # تم تعديل هذا الجزء وضبط المسافات وحذف التكرار
                         col_pdf, col_maint = st.columns(2)
                         with col_pdf:
                             if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
@@ -477,10 +477,11 @@ else:
                                 )
                         with col_maint:
                             if st.button("🔧 تسجيل صيانة", key=f"btn_maint_{r['row_index_internal']}"):
-                                st.session_state.menu = "تسجيل صيانة"  # تأكد أن الاسم يطابق المكتوب في القائمة الجانبية
+                                st.session_state.menu = "تسجيل صيانة"
                                 st.session_state.target_customer = r['name']
                                 st.rerun()
-                                # --- جدول المواعيد ---
+
+    # --- جدول المواعيد ---
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
 
@@ -497,7 +498,6 @@ else:
             st.subheader(f"📆 {d.strftime('%A, %Y-%m-%d')}")
 
             for _, cust in df_c[df_c['status'] == "نشط"].iterrows():
-
                 last_m_all = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt')
 
                 if not last_m_all.empty:
@@ -509,9 +509,7 @@ else:
                     ).date()
 
                     if next_v == d or (next_v < today and d == days_to_show[0]):
-
                         with st.expander(f"👤 {cust['name']} | 📞 {cust['phone']}"):
-
                             st.write(f"🏠 {cust.get('adress', '')}")
 
                             cust_hist = df_m[df_m['name'] == cust['name']].sort_values(
@@ -520,9 +518,7 @@ else:
 
                             if not cust_hist.empty:
                                 display = cust_hist.copy()
-
                                 check_cols = ['P1', 'P2', 'P3', 'membrane']
-
                                 for col in check_cols:
                                     if col in display.columns:
                                         display[col] = display[col].apply(
@@ -531,20 +527,21 @@ else:
 
                                 st.dataframe(display[['visit_date'] + check_cols + ['amount']])
 
-                            if st.button("📄 PDF", key=f"pdf_sch_{cust['row_index_internal']}_{d}"):
-                                pdf_data = generate_customer_pdf(cust, cust_hist)
-
-                                st.download_button(
-                                    "تحميل",
-                                    data=pdf_data,
-                                    file_name=f"{cust['name']}.pdf",
-                                    mime="application/pdf"
-                                )
-
-                            if st.button("🔧 تسجيل صيانة", key=f"go_{cust['row_index_internal']}_{d}"):
-                                st.session_state.target_customer = cust['name']
-                                st.session_state.menu_choice = "تسجيل صيانة"
-                                st.rerun()
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("📄 PDF", key=f"pdf_sch_{cust['row_index_internal']}_{d}"):
+                                    pdf_data = generate_customer_pdf(cust, cust_hist)
+                                    st.download_button(
+                                        "تحميل",
+                                        data=pdf_data,
+                                        file_name=f"{cust['name']}.pdf",
+                                        mime="application/pdf"
+                                    )
+                            with col2:
+                                if st.button("🔧 تسجيل صيانة", key=f"go_{cust['row_index_internal']}_{d}"):
+                                    st.session_state.target_customer = cust['name']
+                                    st.session_state.menu = "تسجيل صيانة"
+                                    st.rerun()
 
     # --- تسجيل صيانة ---
     elif menu == "تسجيل صيانة":
