@@ -463,7 +463,7 @@ if st.session_state.user_type == "admin":
 
                         col_pdf, col_maint = st.columns(2)
                         with col_pdf:
-    if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
+                         if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
         pdf_data = generate_customer_pdf(r, cust_hist)
         # تأكد أن download_button تبدأ وتنتهي بأقواس صحيحة
         st.download_button(
