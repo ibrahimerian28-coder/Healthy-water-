@@ -558,48 +558,71 @@ elif st.session_state.user_type == "admin":
                     if execute_gsheet_action("append", "Store_Products", new_prod):
                         st.success("تم إضافة المنتج بنجاح مع الصور!"); st.rerun()
 
-    # --- 8. المتجر 🛒 (نسخة عرض الصور المتعددة) ---
+    # --- 8. المتجر 🛒 (نسخة الربط المباشر) ---
     elif menu == "المتجر 🛒":
         st.header("🛒 متجر Healthy Water")
-        # محاولة قراءة الشيت وتجاوز مشكلة الـ GID عبر البحث في كل البيانات المحملة
-        if df_store.empty:
-            st.warning("جاري محاولة تحديث بيانات المتجر...")
-            df_store = load_data("1168172935") # تأكد من أن هذا الـ GID هو الخاص بصفحة Store_Products
+        
+        # إجبار التطبيق على إعادة قراءة البيانات من الشيت عند دخول هذه الصفحة
+        # استبدل '1168172935' بالرقم الذي استخرجته من الرابط في الخطوة السابقة
+        STORE_GID = "1129472026" 
+        
+        try:
+            # تحديث البيانات لحظياً
+            df_store = load_data(STORE_GID) 
+            
+            if df_store is None or df_store.empty:
+                st.error("لم يتم العثور على بيانات في شيت المتجر. تأكد من وجود أعمدة: Title, Price, Category, Images")
+            else:
+                # تنظيف الأعمدة
+                df_store.columns = df_store.columns.str.strip()
+                
+                # عرض الأقسام
+                tab1, tab2 = st.tabs(["💧 أجهزة العمر الطويل", "🛡️ شمع أصلي ..وبس!"])
+                
+                with tab1:
+                    devices = df_store[df_store['Category'].str.contains('أجهزة', na=False)]
+                    if devices.empty:
+                        st.info("لا توجد أجهزة مضافة حالياً")
+                    else:
+                        cols = st.columns(2)
+                        for i, (_, row) in enumerate(devices.iterrows()):
+                            with cols[i % 2]:
+                                imgs = str(row['Images']).split("||")
+                                st.image(imgs[0], use_column_width=True)
+                                st.subheader(row['Title'])
+                                st.write(f"**السعر:** {row['Price']} ج.م")
+                                if st.button("تفاصيل المنتج", key=f"dev_{i}"):
+                                    st.session_state.selected_prod = row
+                
+                with tab2:
+                    parts = df_store[df_store['Category'].str.contains('شمعات', na=False)]
+                    if parts.empty:
+                        st.info("لا توجد شمعات مضافة حالياً")
+                    else:
+                        cols_p = st.columns(2)
+                        for i, (_, row) in enumerate(parts.iterrows()):
+                            with cols_p[i % 2]:
+                                imgs = str(row['Images']).split("||")
+                                st.image(imgs[0], use_column_width=True)
+                                st.subheader(row['Title'])
+                                st.write(f"**السعر:** {row['Price']} ج.م")
+                                if st.button("تفاصيل المنتج", key=f"part_{i}"):
+                                    st.session_state.selected_prod = row
 
-        if df_store.empty:
-            st.error("لا توجد بيانات. تأكد أن الـ GID في دالة load_data للمتجر صحيح.")
-        else:
-            df_store.columns = df_store.columns.str.strip()
-            
-            # فلترة المنتجات
-            cats = ["أجهزة", "شمعات"]
-            for cat in cats:
-                st.subheader(f" {cat}")
-                items = df_store[df_store['Category'].str.contains(cat, na=False)]
-                if not items.empty:
-                    cols = st.columns(2)
-                    for i, (_, row) in enumerate(items.iterrows()):
-                        with cols[i % 2]:
-                            # عرض أول صورة فقط في المعرض
-                            imgs = str(row['Images']).split("||")
-                            st.image(imgs[0], use_column_width=True)
-                            st.write(f"**{row['Title']}**")
-                            st.write(f"السعر: {row['Price']} ج.م")
-                            if st.button("عرض التفاصيل والصور", key=f"view_{row['row_index_internal']}"):
-                                st.session_state.selected_prod = row
-            
-            # نافذة التفاصيل وعرض كافة الصور
-            if st.session_state.get('selected_prod') is not None:
-                p = st.session_state.selected_prod
-                with st.expander(f"🔍 {p['Title']}", expanded=True):
-                    # عرض جاليري الصور
+                # عرض نافذة التفاصيل إذا تم الاختيار
+                if st.session_state.get('selected_prod') is not None:
+                    p = st.session_state.selected_prod
+                    st.divider()
+                    st.info(f"عرض تفاصيل: {p['Title']}")
                     all_p_imgs = str(p['Images']).split("||")
-                    st.image(all_p_imgs, width=150) # عرض كل الصور بجانب بعضها
-                    st.write(f"**الوصف:**")
-                    st.write(p['Description'])
-                    if st.button("إغلاق"):
+                    st.image(all_p_imgs, width=120)
+                    st.write(f"**وصف المنتج:**\n{p['Description']}")
+                    if st.button("إغلاق العرض"):
                         st.session_state.selected_prod = None
                         st.rerun()
+
+        except Exception as e:
+            st.error(f"حدث خطأ أثناء تحميل المتجر: {e}")
             
             # عرض الشمعات
             st.subheader("🛡️ شمع أصلي ..وبس!")
