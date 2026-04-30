@@ -65,57 +65,83 @@ if not df_exp.empty:
 
 # --- 4. وظيفة توليد الـ PDF ---
 def generate_customer_pdf(cust_row, history_df):
+    # 1. إعداد الصفحة (L للوضع الأفقي)
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
+    # 2. تحميل الخط العربي
     font_name = "Arial.ttf" 
     font_path = os.path.join(os.getcwd(), font_name)
-    
     has_arabic = False
     if os.path.exists(font_path):
         try:
             pdf.add_font('ArabicFont', '', font_path)
             pdf.set_font('ArabicFont', '', 14)
             has_arabic = True
-        except Exception as e:
-            st.error(f"فشل ربط الخط: {e}")
-    else:
-        st.warning(f"تنبيه: ملف الخط {font_name} غير موجود، سيتم استخدام الإنجليزية فقط.")
+        except: has_arabic = False
 
     def format_ar(text):
         if not text or str(text).strip() == "": return ""
-        if not has_arabic:
-            return "".join([c for c in str(text) if ord(c) < 128])
+        if not has_arabic: return "".join([c for c in str(text) if ord(c) < 128])
         return get_display(reshape(str(text)))
 
-    if not has_arabic: pdf.set_font("Arial", 'B', 14)
-
+    # --- الهيدر (اللوجو والعنوان) ---
     try:
-        title = f"تقرير صيانة: {cust_row['name']}"
-        pdf.cell(0, 10, format_ar(title), ln=True, align='C')
-    except:
-        pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, "Maintenance Report", ln=True, align='C')
+        # وضع اللوجو أعلى يسار الصفحة (x=250 تقريباً للجهة اليسرى في A4 Landscape)
+        pdf.image(LOGO_PATH, x=250, y=10, w=35) 
+    except: pass
 
-    pdf.ln(10)
-    
+    if has_arabic: pdf.set_font('ArabicFont', '', 20)
+    pdf.cell(0, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
+    pdf.set_font('Arial', 'I', 10)
+    pdf.cell(0, 5, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
+    pdf.ln(15)
+
+    # --- إعداد الجدول ---
     cols = ['ملاحظات', 'المبلغ', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
-    widths = [100, 20, 15, 15, 15, 15, 15, 15, 15, 30]
+    widths = [90, 20, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    pdf.set_fill_color(200, 200, 200)
+    # تنسيق الصف الأول (أزرق فاتح)
+    pdf.set_fill_color(173, 216, 230) # Light Blue
+    pdf.set_text_color(0, 0, 0)
     if has_arabic: pdf.set_font('ArabicFont', '', 11)
     
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
+    # --- محتوى الجدول (صفوف ملونة بالتناوب) ---
+    if has_arabic: pdf.set_font('ArabicFont', '', 10)
+    fill = False
     for _, r in history_df.iterrows():
-        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R')
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C')
+        # تحديد لون الصف (أبيض أو رمادي فاتح)
+        if fill: pdf.set_fill_color(245, 245, 245)
+        else: pdf.set_fill_color(255, 255, 255)
+        
+        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', fill)
+        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', fill)
+        
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
-            val = "V" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(15, 8, val, 1, 0, 'C')
-        pdf.cell(widths[9], 8, str(r['visit_date']), 1, 1, 'C')
+            # استبدال V بكلمة "تم"
+            val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
+            pdf.cell(15, 8, val, 1, 0, 'C', fill)
+            
+        pdf.cell(widths[9], 8, str(r['visit_date']), 1, 1, 'C', fill)
+        fill = not fill # تبديل اللون للصف القادم
+
+    # --- الفوتر (Footer) ---
+    pdf.set_y(-25) # النزول لأسفل الصفحة
+    pdf.set_draw_color(173, 216, 230)
+    pdf.line(10, pdf.get_y(), 287, pdf.get_y()) # خط فوق الفوتر
+    pdf.ln(5)
+    
+    if has_arabic: pdf.set_font('ArabicFont', '', 12)
+    pdf.set_text_color(100, 100, 100)
+    
+    # إضافة اسم الشركة ورقم الهاتف مع أيقونات رمزية ورابط اتصل بنا
+    footer_text = f"Healthy Water | للتواصل معنا: {COMPANY_PHONE} 📞 💬"
+    # جعل السطر كاملاً عبارة عن رابط يفتح الاتصال
+    pdf.cell(0, 10, format_ar(footer_text), 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
 
     return bytes(pdf.output())
 
