@@ -462,16 +462,15 @@ if st.session_state.user_type == "admin":
                         st.dataframe(display[['visit_date'] + check_cols + ['amount']])
 
                         col_pdf, col_maint = st.columns(2)
-                        with col_pdf:
-                         if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
-        pdf_data = generate_customer_pdf(r, cust_hist)
-        # تأكد أن download_button تبدأ وتنتهي بأقواس صحيحة
-        st.download_button(
-            label="تحميل",
-            data=pdf_data,
-            file_name=f"{r['name']}.pdf",
-            mime="application/pdf"
-        )
+    with col_pdf:
+        if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
+            pdf_data = generate_customer_pdf(r, cust_hist) # السطر ده لازم يكون متشفت لليمين عن الـ if
+            st.download_button(
+                label="تحميل",
+                data=pdf_data,
+                file_name=f"{r['name']}.pdf",
+                mime="application/pdf"
+            )
                                 # --- جدول المواعيد ---
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
