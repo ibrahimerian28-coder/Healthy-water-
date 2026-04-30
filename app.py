@@ -59,8 +59,10 @@ def read_gsheet(sheet_name):
     gids = {"Store_Products": "123456789"}
     return load_data(gids.get(sheet_name, "0"))
     def calculate_day_cogs(target_date):
-    """حساب تكلفة الشمعات المستخدمة في تاريخ معين"""
-        if df_m.empty or df_inv.empty:
+    if df_m.empty or df_inv.empty:
+        return 0
+    day_maint = df_m[df_m['v_date_dt'].dt.date == target_date]
+    if day_maint.empty:
         return 0
     # فلترة الصيانات التي تمت في هذا التاريخ
     day_maint = df_m[df_m['v_date_dt'].dt.date == target_date]
