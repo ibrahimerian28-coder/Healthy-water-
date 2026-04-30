@@ -14,6 +14,12 @@ WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ
 LOGO_PATH = "logo.png"
 ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
+# قراءة بيانات المتجر من التبويب الجديد
+df_store = read_gsheet("Store_Products")
+
+# التأكد من تحويل الأعمدة الرقمية لضمان عدم حدوث أخطاء في الحسابات
+df_store['Price'] = df_store['Price'].apply(to_num)
+df_store['Old_Price'] = df_store['Old_Price'].apply(to_num)
 
 st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="🚰")
 
@@ -181,11 +187,18 @@ elif st.session_state.user_type == "admin":
     st.sidebar.image(LOGO_PATH, use_column_width=True)
     if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
     
-    menu = st.sidebar.radio("القائمة", 
-        ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈"],
-        index=["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈"].index(st.session_state.menu_choice)
-    )
-    st.session_state.menu_choice = menu 
+# قائمة الخيارات للأدمن
+admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
+
+# التأكد من أن الاختيار الحالي موجود في القائمة لتجنب الأخطاء
+if st.session_state.menu_choice not in admin_options:
+    st.session_state.menu_choice = "بيانات العملاء"
+
+menu = st.sidebar.radio(
+    "القائمة", 
+    admin_options,
+    index=admin_options.index(st.session_state.menu_choice)
+) 
     
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
@@ -561,70 +574,149 @@ elif st.session_state.user_type == "admin":
                 all_years_data.append({"السنة": str(y), "إجمالي الربح": y_sum})
             df_all_y = pd.DataFrame(all_years_data)
             st.plotly_chart(px.bar(df_all_y, x="السنة", y="إجمالي الربح", title="مقارنة الأرباح السنوية"))
+        elif menu == "المتجر 🛒":
+        st.header("🛒 متجر Healthy Water")
+        
+        # --- نظام سلة التسوق ---
+        if 'cart' not in st.session_state:
+            st.session_state.cart = []
+        
+        # أيقونة السلة مع العداد
+        cart_count = len(st.session_state.cart)
+        st.sidebar.markdown(f"### 🛒 السلة: ({cart_count}) منتجات")
+        if st.sidebar.button("فتح سلة التسوق"):
+            st.session_state.show_cart = True
 
-# هذا الكود يوضع في الجزء المخصص لعرض واجهة العميل
-if st.session_state.user_type == "customer":
-    st.header(f"👋 أهلاً بك")
-    
-    # جلب كافة السجلات المرتبطة برقم الهاتف الذي سجل به العميل
-    customer_records = st.session_state.customer_data
-    
-    st.info(f"تم العثور على ({len(customer_records)}) أجهزة مسجلة برقمك.")
+        # --- قسم أجهزة العمر الطويل 💧 ---
+        st.subheader("💧 أجهزة العمر الطويل")
+        cols = st.columns(2)
+        devices = df_store[df_store['Category'] == 'أجهزة']
+        for i, row in devices.iterrows():
+            with cols[i % 2]:
+                st.image(row['Images'], use_column_width=True)
+                if st.button(row['Title'], key=f"btn_{row['ID']}"):
+                    st.session_state.selected_prod = row
+                st.write(f"**السعر:** {row['Price']} ج.م")
+                st.markdown(f"~~{row['Old_Price']} ج.م~~", unsafe_allow_html=True)
 
-    # تكرار العرض لكل جهاز (عميل) مرتبط بنفس الرقم
-    for _, cust in customer_records.iterrows():
-        with st.container():
-            # إطار مميز لكل جهاز
-            st.markdown(f"### 🖥️ بيانات الجهاز: {cust['name']}")
-            
-            # 1. عرض البيانات الأساسية للعميل كما في صفحة بيانات العملاء
-            c1, c2, c3 = st.columns(3)
-            c1.write(f"📍 **المنطقة:** {cust.get('area', 'غير محدد')}")
-            c2.write(f"🏠 **العنوان:** {cust.get('adress', 'غير محدد')}")
-            c3.write(f"📅 **تاريخ التركيب:** {cust.get('install_date', 'غير محدد')}")
-            
-            c1.write(f"📞 **الهاتف:** {cust.get('phone', '-')}")
-            c2.write(f"⚙️ **دورة الصيانة:** كل {cust.get('cycle', '-')} شهور")
-            c3.write(f"🔔 **الحالة:** {cust.get('status', 'نشط')}")
-            
+        st.divider()
+
+        # --- قسم شمع أصلي ..وبس! 🛡️ ---
+        st.subheader("🛡️ شمع أصلي ..وبس!")
+        cols_p = st.columns(2)
+        parts = df_store[df_store['Category'] == 'شمعات']
+        for i, row in parts.iterrows():
+            with cols_p[i % 2]:
+                st.image(row['Images'], use_column_width=True)
+                if st.button(row['Title'], key=f"btn_p_{row['ID']}"):
+                    st.session_state.selected_prod = row
+                st.write(f"**السعر:** {row['Price']} ج.م")
+
+        # --- نافذة تفاصيل المنتج (عند الضغط على العنوان) ---
+        if 'selected_prod' in st.session_state and st.session_state.selected_prod is not None:
+            p = st.session_state.selected_prod
+            with st.expander(f"🔍 تفاصيل: {p['Title']}", expanded=True):
+                st.image(p['Images'], caption="يمكنك عمل زووم للصورة بالضغط عليها")
+                st.write(f"**الوصف:** {p['Description']}")
+                if st.button("➕ أضف لسلة التسوق", type="primary"):
+                    st.session_state.cart.append(p)
+                    st.success("تمت الإضافة للسلة")
+                    st.session_state.selected_prod = None
+                    st.rerun()
+
+        # --- صفحة إتمام الشراء (السلة) ---
+        if st.session_state.get('show_cart'):
             st.divider()
+            st.subheader("🛍️ محتويات السلة")
+            total_price = 0
+            cart_items_text = ""
+            for item in st.session_state.cart:
+                st.write(f"- {item['Title']} ({item['Price']} ج.م)")
+                total_price += to_num(item['Price'])
+                cart_items_text += f"- {item['Title']}\n"
+            
+            st.success(f"💰 إجمالي المبلغ المطلوب: {total_price} ج.م")
+            st.info("طرق الدفع: كاش عند الاستلام / انستا باي / محفظة إلكترونية")
+            
+            msg_order = f"طلب شراء جديد من المتجر:\n{cart_items_text}\nالإجمالي: {total_price} ج.م"
+            wa_url = f"https://wa.me/201286609535?text={msg_order}"
+            st.link_button("✅ إتمام الطلب عبر واتساب", wa_url)
+            if st.button("تفريغ السلة"):
+                st.session_state.cart = []
+                st.rerun()
+        elif menu == "اطلب صيانة فوراً ⚙️":
+        st.header("⚙️ اطلب صيانة فوراً")
+        
+        with st.form("maintenance_request"):
+            problem = st.selectbox("اختار نوع المشكلة اللي بتواجهك:", [
+                "طلب تغيير شمعات", "الفلتر بيسرب", "الموتور مبيفصلش", 
+                "الموتور مش شغال", "الميه ضعيفة جداً", "الفلتر مسدود", "أخرى"
+            ])
+            
+            shamaat = []
+            if problem == "طلب تغيير شمعات":
+                shamaat = st.multiselect("اختار الشمعات اللي محتاجة تغيير:", [
+                    "المرحلة الأولى", "المرحلة الثانية", "المرحلة الثالثة", 
+                    "الممبرين", "المرحلة الخامسة", "المرحلة السادسة", "المرحلة السابعة", "لمبة UV", "أخرى"
+                ])
+            
+            other_desc = ""
+            if problem == "أخرى":
+                other_desc = st.text_area("اشرح لنا المشكلة بالتفصيل:")
+            
+            address = st.text_input("العنوان بالتفصيل")
+            area = st.text_input("المنطقة")
+            
+            if st.form_submit_button("إرسال طلب الصيانة"):
+                # تجميع نص الرسالة
+                msg_body = f"طلب صيانة جديد:\n- المشكلة: {problem}\n"
+                if shamaat: msg_body += f"- الشمعات المطلوبة: {', '.join(shamaat)}\n"
+                if other_desc: msg_body += f"- وصف إضافي: {other_desc}\n"
+                msg_body += f"- المنطقة: {area}\n- العنوان: {address}"
+                
+                wa_maintenance_url = f"https://wa.me/201286609535?text={msg_body}"
+                st.success("تم تجهيز الطلب، اضغط على الزر بالأسفل للإرسال")
+                st.link_button("📱 تواصل مع الفني عبر واتساب", wa_maintenance_url)
+        elif menu == "إدارة المنتجات ⚙️":
+        st.header("⚙️ إضافة منتجات للمتجر")
+        
+        with st.form("add_product_form"):
+            cat = st.selectbox("قسم المنتج", ["أجهزة", "شمعات"])
+            title = st.text_input("عنوان الإعلان (مثلاً: فلتر 7 مراحل تايواني)")
+            price = st.number_input("السعر الحالي", min_value=0)
+            old_price = st.number_input("السعر قبل الخصم (اختياري)", min_value=0)
+            desc = st.text_area("وصف المنتج ومميزاته")
+            img_url = st.text_input("رابط صورة المنتج (Link)")
+            
+            if st.form_submit_button("رفع المنتج للمتجر"):
+                new_id = len(df_store) + 1
+                new_product = [new_id, cat, title, price, old_price, desc, img_url]
+                
+                if execute_gsheet_action("append", "Store_Products", new_product):
+                    st.success("✅ تم إضافة المنتج بنجاح لمتجرك!")
+                    st.rerun()
+                else:
+                    st.error("❌ فشل في الاتصال بشيت جوجل")
 
-            # 2. جلب وعرض جدول الصيانات الخاص بهذا الجهاز تحديداً
-            st.subheader(f"🛠️ سجل الصيانات والتكاليف")
-            
-            # فلترة جدول الصيانات بناءً على اسم العميل
-            cust_hist = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt', ascending=False)
-            
-            if not cust_hist.empty:
-                display_hist = cust_hist.copy()
-                check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
-                
-                # تحويل القيم لعلامات صح وخطأ لتسهيل القراءة للعميل
-                for col in check_cols:
-                    if col in display_hist.columns:
-                        display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
-                
-                # --- التعديل هنا: إضافة 'amount' لقائمة الأعمدة المعروضة ---
-                # ترتيب الأعمدة: التاريخ، قطع الغيار، المبلغ المدفوع، الملاحظات
-                show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
-                
-                # عرض الجدول مع تسمية الأعمدة بشكل واضح
-                st.dataframe(
-                    display_hist[show_cols].rename(columns={'visit_date': 'تاريخ الزيارة', 'amount': 'المبلغ (ج.م)', 'notes': 'ملاحظات'}),
-                    use_container_width=True, 
-                    hide_index=True
-                )
-                
-                # إتاحة تحميل ملف PDF للصيانة
-                if st.button(f"📄 تحميل تقرير PDF لـ {cust['name']}", key=f"pdf_btn_{cust['row_index_internal']}"):
-                    pdf_data = generate_customer_pdf(cust, cust_hist)
-                    st.download_button(label="اضغط هنا لبدء التحميل", data=pdf_data, file_name=f"صيانة_{cust['name']}.pdf", mime="application/pdf")
-            else:
-                st.warning("لا يوجد سجل صيانات مسجل لهذا الجهاز حتى الآن.")
-            
-            st.markdown("---") 
+# هذا الكود يظهر فقط لو العميل مسجل دخول
+if st.session_state.user_type == "customer":
+    st.sidebar.markdown(f"### ✨ أهلاً بك  ")
+    
+    # قائمة خيارات العميل
+    customer_options = ["بياناتي وصياناتي", "المتجر 🛒", "اطلب صيانة فوراً ⚙️"]
+    
+    # إدارة اختيار العميل
+    if 'cust_menu' not in st.session_state:
+        st.session_state.cust_menu = "بياناتي وصياناتي"
+        
+    menu = st.sidebar.radio(
+        "القائمة",
+        customer_options,
+        index=customer_options.index(st.session_state.cust_menu)
+    )
+    st.session_state.cust_menu = menu # حفظ الاختيار
 
-    # زر تسجيل الخروج في القائمة الجانبية
+    st.sidebar.divider()
     if st.sidebar.button("تسجيل الخروج"):
         st.session_state.user_type = None
         st.session_state.customer_data = None
