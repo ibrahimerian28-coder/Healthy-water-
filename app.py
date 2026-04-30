@@ -148,12 +148,34 @@ if st.session_state.user_type is None:
             if pwd == ADMIN_PASSWORD:
                 st.session_state.user_type = "admin"; st.rerun()
     with t2:
-        phone = st.text_input("رقم الهاتف المسجل")
+        phone_input = st.text_input("رقم الهاتف المسجل")
         if st.button("دخول العميل"):
-            match = df_c[df_c[['phone','phone_1','phone_2','phone_3','phone_4']].astype(str).apply(lambda x: x.str.contains(phone)).any(axis=1)]
-            if not match.empty:
-                st.session_state.user_type = "customer"; st.session_state.customer_data = match; st.rerun()
-
+            if phone_input.strip() == "":
+                st.warning("يرجى إدخال رقم الهاتف")
+            else:
+                # 1. تنظيف رقم الهاتف المدخل من المسافات
+                clean_phone = str(phone_input).strip()
+                
+                # 2. البحث عن أي أعمدة في الشيت تحتوي على كلمة phone
+                available_phone_cols = [col for col in df_c.columns if 'phone' in col.lower()]
+                
+                if not available_phone_cols:
+                    st.error("خطأ: لم يتم العثور على أعمدة الهاتف في قاعدة البيانات.")
+                else:
+                    # 3. البحث الآمن في الأعمدة المتاحة فقط مع تجاهل الخطأ في القيم الفارغة
+                    mask = df_c[available_phone_cols].astype(str).apply(
+                        lambda x: x.str.contains(clean_phone, na=False)
+                    ).any(axis=1)
+                    
+                    match = df_c[mask]
+                    
+                    if not match.empty:
+                        st.session_state.user_type = "customer"
+                        st.session_state.customer_data = match
+                        st.success("تم تسجيل الدخول بنجاح")
+                        st.rerun()
+                    else:
+                        st.error("عذراً، هذا الرقم غير مسجل لدينا.")
 # --- 6. واجهة الأدمن ---
 elif st.session_state.user_type == "admin":
     st.sidebar.image(LOGO_PATH, use_column_width=True)
