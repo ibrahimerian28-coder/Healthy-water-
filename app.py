@@ -58,6 +58,37 @@ def parse_dt(val):
 def read_gsheet(sheet_name):
     gids = {"Store_Products": "123456789"}
     return load_data(gids.get(sheet_name, "0"))
+    def calculate_day_cogs(target_date):
+    """حساب تكلفة الشمعات المستخدمة في تاريخ معين"""
+    if df_m.empty or df_inv.empty:
+        return 0
+    # فلترة الصيانات التي تمت في هذا التاريخ
+    day_maint = df_m[df_m['v_date_dt'].dt.date == target_date]
+    if day_maint.empty:
+        return 0
+    
+    total_cogs = 0
+    # خريطة لربط اسم العمود في شيت الصيانة باسم الصنف في شيت المخزن
+    parts_map = {
+        'P1': 'P1', 'P2': 'P2', 'P3': 'P3', 
+        'membrane': 'Membrane', 'post_carbon': 'Post Carbon', 
+        'Calcite': 'Calcite', 'infrared': 'Infrared'
+    }
+    
+    for _, row in day_maint.iterrows():
+        for col, inv_name in parts_map.items():
+            # إذا كانت الخانة معلمة كتم (True أو ✅)
+            if str(row.get(col, '')).lower() in ['true', '1', '✅']:
+                cost_row = df_inv[df_inv['item_name'] == inv_name]
+                if not cost_row.empty:
+                    total_cogs += to_num(cost_row['cost_price'].values[0])
+        # حساب القطع الإضافية (Other)
+        other_item = row.get('other', '')
+        if other_item:
+            cost_row = df_inv[df_inv['item_name'] == other_item]
+            if not cost_row.empty:
+                total_cogs += to_num(cost_row['cost_price'].values[0])
+    return total_cogs
 
 # --- 3. تحميل البيانات ---
 df_c = load_data("0")  # Customers
@@ -428,14 +459,17 @@ if st.session_state.user_type == "admin":
 
                         st.dataframe(display[['visit_date'] + check_cols + ['amount']])
 
-                        if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
-                            pdf_data = generate_customer_pdf(r, cust_hist)
-
-                            st.download_button(
-                                "تحميل",
-                                data=pdf_data,
-                                file_name=f"{r['name']}.pdf",
-                                mime="application/pdf"
+                        col_pdf, col_maint = st.columns(2)
+                        with col_pdf:
+                            if st.button("📄 PDF", key=f"pdf_{r['row_index_internal']}"):
+                                pdf_data = generate_customer_pdf(r, cust_hist)
+                                st.download_button("تحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
+                        with col_maint:
+                            if st.button("🔧 تسجيل صيانة", key=f"add_m_{r['row_index_internal']}"):
+                                st.session_state.target_customer = r['name']
+                                # لضمان الانتقال التلقائي
+                                st.query_params["menu"] = "تسجيل صيانة" 
+                                st.rerun()
                             )
                                 # --- جدول المواعيد ---
     elif menu == "جدول المواعيد 📅":
@@ -628,60 +662,84 @@ if st.session_state.user_type == "admin":
 
     # --- المصروفات ---
     elif menu == "المصروفات":
-        st.header("💵 المصروفات")
+        st.header("💵 إدارة المصروفات والتكاليف")
+        
+        sel_date = st.date_input("اختر التاريخ لعرض البيانات", datetime.now())
+        
+        # عرض مصروفات اليوم المختار من الشيت
+        day_exp_df = df_exp[df_exp['exp_date_dt'].dt.date == sel_date]
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("📋 مصروفات اليوم المسجلة")
+            if not day_exp_df.empty:
+                st.dataframe(day_exp_df[['transportation', 'sundries', 'monthly_expensess', 'salaries', 'notes']], use_container_width=True)
+            else:
+                st.info("لا توجد مصروفات يدوية لهذا اليوم.")
+        
+        with c2:
+            st.subheader("⚙️ تكلفة البضاعة (COGS)")
+            day_cogs = calculate_day_cogs(sel_date)
+            st.metric("إجمالي تكلفة الشمعات والقطع", f"{day_cogs} ج")
+            st.caption("يتم حسابها تلقائياً بناءً على زيارات الصيانة في هذا اليوم وسعر التكلفة من المخزن.")
 
-        selected_date = st.date_input("التاريخ", datetime.now())
-
-        with st.form("exp_form"):
-
-            c1, c2 = st.columns(2)
-
-            trans = c1.number_input("انتقالات", min_value=0)
-            neth = c2.number_input("نثريات", min_value=0)
-            monthly = c1.number_input("مصروف شهري", min_value=0)
-            salary = c2.number_input("رواتب", min_value=0)
-
-            notes = st.text_area("ملاحظات")
-
-            total = trans + neth + monthly + salary
-
-            st.markdown(f"الإجمالي: **{total} ج**")
-
-            if st.form_submit_button("حفظ"):
-
-                data = [
-                    str(selected_date),
-                    trans,
-                    neth,
-                    monthly,
-                    salary,
-                    notes
-                ]
-
+        st.divider()
+        with st.form("new_exp_form"):
+            st.subheader("➕ إضافة مصروف يدوي جديد")
+            f1, f2 = st.columns(2)
+            trans = f1.number_input("انتقالات", 0)
+            neth = f2.number_input("نثريات", 0)
+            monthly = f1.number_input("مصروفات شهرية", 0)
+            salary = f2.number_input("رواتب", 0)
+            exp_notes = st.text_area("ملاحظات إضافية")
+            if st.form_submit_button("حفظ المصروف"):
+                data = [str(sel_date), trans, neth, monthly, salary, exp_notes]
                 if execute_gsheet_action("append", "Expenses", data):
-                    st.success("تم الحفظ")
+                    st.success("تم حفظ المصروف بنجاح")
                     st.rerun()
 
     # --- الأرباح ---
     elif menu == "الأرباح 📈":
-        st.header("📈 الأرباح")
+        st.header("📊 تقارير الأرباح والتحليل المالي")
+        
+        today = datetime.now().date()
+        
+        def get_period_stats(start, end):
+            # 1. الإيرادات
+            mask_m = (df_m['v_date_dt'].dt.date >= start) & (df_m['v_date_dt'].dt.date <= end)
+            total_rev = df_m[mask_m]['amount_num'].sum()
+            
+            # 2. المصروفات اليدوية
+            mask_e = (df_exp['exp_date_dt'].dt.date >= start) & (df_exp['exp_date_dt'].dt.date <= end)
+            manual_exp = 0
+            cols = ['transportation', 'sundries', 'monthly_expensess', 'salaries']
+            if not df_exp.empty:
+                for col in cols:
+                    if col in df_exp.columns:
+                        manual_exp += df_exp[mask_e][col].apply(to_num).sum()
+            
+            # 3. تكلفة البضاعة للفترة
+            total_cogs = sum([calculate_day_cogs(d.date()) for d in pd.date_range(start, end)])
+            
+            return total_rev, (manual_exp + total_cogs), (total_rev - manual_exp - total_cogs)
 
-        def get_daily_net(d):
-            d = pd.to_datetime(d).date()
+        # عرض الكروت
+        m1, m2, m3 = st.columns(3)
+        r_d, e_d, n_d = get_period_stats(today, today)
+        m1.metric("صافي ربح اليوم", f"{n_d} ج", f"إيراد: {r_d}")
 
-            rev = df_m[df_m['v_date_dt'].dt.date == d]['amount_num'].sum()
+        r_m, e_m, n_m = get_period_stats(today.replace(day=1), today)
+        m2.metric("صافي ربح الشهر", f"{n_m} ج")
 
-            exp = 0
-            day_ex = df_exp[df_exp['exp_date_dt'].dt.date == d]
-
-            for col in ['transportation', 'sundries', 'monthly_expensess', 'salaries']:
-                if col in day_ex.columns:
-                    exp += day_ex[col].apply(to_num).sum()
-
-            return rev - exp
-
-        sel = st.date_input("اختار يوم", datetime.now())
-        st.metric("صافي الربح", f"{get_daily_net(sel)} ج")
+        # الرسم البياني للإيرادات
+        st.subheader("📈 حركة الإيرادات آخر 10 أيام")
+        last_10 = [today - timedelta(days=i) for i in range(10)]
+        chart_df = pd.DataFrame({
+            "التاريخ": [d.strftime('%Y-%m-%d') for d in last_10],
+            "الإيراد": [df_m[df_m['v_date_dt'].dt.date == d]['amount_num'].sum() for d in last_10]
+        }).sort_values("التاريخ")
+        fig = px.line(chart_df, x="التاريخ", y="الإيراد", markers=True, title="نمو الإيرادات اليومي")
+        st.plotly_chart(fig, use_container_width=True)
 
     # --- إدارة المنتجات ---
     elif menu == "إدارة المنتجات ⚙️":
@@ -696,6 +754,20 @@ if st.session_state.user_type == "admin":
             cat = st.selectbox("التصنيف", ["أجهزة", "شمعات"])
 
             desc = st.text_area("الوصف")
+            # خانة رفع الصور (بحد أقصى 5)
+            uploaded_files = st.file_uploader("ارفع صور المنتج (حتى 5 صور)", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True)
+            
+            # زر الإضافة
+            if st.form_submit_button("إضافة"):
+                img_data = ""
+                if uploaded_files:
+                    # تحويل أول صورة لـ Base64 لتخزينها (كمثال للتبسيط)
+                    img_data = base64.b64encode(uploaded_files[0].read()).decode()
+                
+                data = [name, price, old_price, cat, desc, img_data]
+                if execute_gsheet_action("append", "Store_Products", data):
+                    st.success("تمت إضافة المنتج بنجاح")
+                    st.rerun()
 
             if st.form_submit_button("إضافة"):
 
