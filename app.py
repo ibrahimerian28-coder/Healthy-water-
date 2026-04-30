@@ -189,8 +189,7 @@ elif st.session_state.user_type == "admin":
     st.sidebar.image(LOGO_PATH, use_column_width=True)
     if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
     
-    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
-
+    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️", "اطلب صيانة فوراً ⚙️"]
     if st.session_state.menu_choice not in admin_options:
         st.session_state.menu_choice = "بيانات العملاء"
 
@@ -525,80 +524,81 @@ elif st.session_state.user_type == "admin":
             df_all_y = pd.DataFrame(all_years_data)
             st.plotly_chart(px.bar(df_all_y, x="السنة", y="إجمالي الربح", title="مقارنة الأرباح السنوية"))
             
+    # --- 7. إدارة المنتجات ⚙️ ---
+    elif menu == "إدارة المنتجات ⚙️":
+        st.header("⚙️ إدارة منتجات المتجر")
+        with st.form("add_product_form"):
+            st.subheader("إضافة منتج جديد")
+            p_title = st.text_input("اسم المنتج")
+            p_price = st.number_input("السعر الحالي", min_value=0)
+            p_old_price = st.number_input("السعر القديم (للخصم)", min_value=0)
+            p_cat = st.selectbox("التصنيف", ["أجهزة", "شمعات"])
+            p_img = st.text_input("رابط الصورة (URL)")
+            p_desc = st.text_area("وصف المنتج")
+            if st.form_submit_button("حفظ المنتج"):
+                # توليد ID بسيط بناءً على الوقت
+                new_prod = [str(datetime.now().timestamp()), p_title, p_price, p_old_price, p_cat, p_img, p_desc]
+                if execute_gsheet_action("append", "Store_Products", new_prod):
+                    st.success("تم إضافة المنتج بنجاح"); st.rerun()
+
+    # --- 8. المتجر 🛒 ---
     elif menu == "المتجر 🛒":
         st.header("🛒 متجر Healthy Water")
-        
-        if 'cart' not in st.session_state:
-            st.session_state.cart = []
-        
-        cart_count = len(st.session_state.cart)
-        st.sidebar.markdown(f"### 🛒 السلة: ({cart_count}) منتجات")
-        if st.sidebar.button("فتح سلة التسوق"):
-            st.session_state.show_cart = True
-
-        st.subheader("💧 أجهزة العمر الطويل")
-        cols = st.columns(2)
-        devices = df_store[df_store['Category'] == 'أجهزة']
-        for i, row in devices.iterrows():
-            with cols[i % 2]:
-                st.image(row['Images'], use_column_width=True)
-                if st.button(row['Title'], key=f"btn_{row['ID']}"):
-                    st.session_state.selected_prod = row
-                st.write(f"**السعر:** {row['Price']} ج.م")
-                st.markdown(f"~~{row['Old_Price']} ج.م~~", unsafe_allow_html=True)
-
-        st.divider()
-
-        st.subheader("🛡️ شمع أصلي ..وبس!")
-        cols_p = st.columns(2)
-        parts = df_store[df_store['Category'] == 'شمعات']
-        for i, row in parts.iterrows():
-            with cols_p[i % 2]:
-                st.image(row['Images'], use_column_width=True)
-                if st.button(row['Title'], key=f"btn_p_{row['ID']}"):
-                    st.session_state.selected_prod = row
-                st.write(f"**السعر:** {row['Price']} ج.م")
-
-        if 'selected_prod' in st.session_state and st.session_state.selected_prod is not None:
-            p = st.session_state.selected_prod
-            with st.expander(f"🔍 تفاصيل: {p['Title']}", expanded=True):
-                st.image(p['Images'], caption="يمكنك عمل زووم للصورة بالضغط عليها")
-                st.write(f"**الوصف:** {p['Description']}")
-                if st.button("➕ أضف لسلة التسوق", type="primary"):
-                    st.session_state.cart.append(p)
-                    st.success("تمت الإضافة للسلة")
-                    st.session_state.selected_prod = None
-                    st.rerun()
-
-        if st.session_state.get('show_cart'):
+        if df_store.empty:
+            st.error("لا توجد بيانات في شيت المتجر. تأكد من تسمية الشيت Store_Products وتوافر الأعمدة.")
+        else:
+            # تنظيف أسماء الأعمدة لتجنب KeyError
+            df_store.columns = df_store.columns.str.strip()
+            
+            # عرض الأجهزة
+            st.subheader("💧 أجهزة العمر الطويل")
+            devices = df_store[df_store['Category'].str.contains('أجهزة', na=False)]
+            if not devices.empty:
+                cols = st.columns(2)
+                for i, (_, row) in enumerate(devices.iterrows()):
+                    with cols[i % 2]:
+                        st.image(row['Images'], use_column_width=True)
+                        st.write(f"**{row['Title']}**")
+                        st.write(f"السعر: {row['Price']} ج.م")
+                        if st.button("تفاصيل المنتج", key=f"det_{row['row_index_internal']}"):
+                            st.session_state.selected_prod = row
+            
             st.divider()
-            st.subheader("🛍️ محتويات السلة")
-            total_price = 0
-            cart_items_text = ""
-            for item in st.session_state.cart:
-                st.write(f"- {item['Title']} ({item['Price']} ج.م)")
-                total_price += to_num(item['Price'])
-                cart_items_text += f"- {item['Title']}\n"
             
-            st.success(f"💰 إجمالي المبلغ المطلوب: {total_price} ج.م")
-            st.info("طرق الدفع: كاش عند الاستلام / انستا باي / محفظة إلكترونية")
-            
-            msg_order = f"طلب شراء جديد من المتجر:\n{cart_items_text}\nالإجمالي: {total_price} ج.م"
-            wa_url = f"https://wa.me/201286609535?text={msg_order}"
-            st.link_button("✅ إتمام الطلب عبر واتساب", wa_url)
-            if st.button("تفريغ السلة"):
-                st.session_state.cart = []
-                st.rerun()
+            # عرض الشمعات
+            st.subheader("🛡️ شمع أصلي ..وبس!")
+            parts = df_store[df_store['Category'].str.contains('شمعات', na=False)]
+            if not parts.empty:
+                cols_p = st.columns(2)
+                for i, (_, row) in enumerate(parts.iterrows()):
+                    with cols_p[i % 2]:
+                        st.image(row['Images'], use_column_width=True)
+                        st.write(f"**{row['Title']}**")
+                        st.write(f"السعر: {row['Price']} ج.م")
+                        if st.button("تفاصيل المنتج", key=f"det_p_{row['row_index_internal']}"):
+                            st.session_state.selected_prod = row
 
+            # نافذة التفاصيل (تظهر عند الضغط على المنتج)
+            if 'selected_prod' in st.session_state and st.session_state.selected_prod is not None:
+                p = st.session_state.selected_prod
+                with st.expander(f"🔍 تفاصيل: {p['Title']}", expanded=True):
+                    st.write(f"**الوصف:** {p['Description']}")
+                    if st.button("إغلاق التفاصيل"):
+                        st.session_state.selected_prod = None
+                        st.rerun()
+
+    # --- 9. اطلب صيانة فوراً ⚙️ ---
     elif menu == "اطلب صيانة فوراً ⚙️":
-        st.header("⚙️ اطلب صيانة فوراً")
-        
-        with st.form("maintenance_request"):
-            problem = st.selectbox("اختار نوع المشكلة اللي بتواجهك:", [
-                "طلب تغيير شمعات", 
-                "تسريب مياه", 
-                "تغير في طعم أو لون المياه", 
-                "عطل في الموتور أو الكهرباء"
-            ])
-            # باقي الكود هنا...
-            st.form_submit_button("إرسال الطلب")
+        st.header("⚙️ طلب صيانة فورية")
+        with st.form("urgent_m_form"):
+            u_name = st.text_input("الاسم بالكامل")
+            u_phone = st.text_input("رقم الهاتف")
+            u_address = st.text_input("العنوان")
+            u_problem = st.selectbox("نوع المشكلة", ["طلب تغيير شمعات", "تسريب مياه", "عطل في الموتور", "تغير طعم المياه"])
+            u_notes = st.text_area("تفاصيل إضافية")
+            
+            if st.form_submit_button("إرسال الطلب عبر واتساب"):
+                order_msg = f"طلب صيانة جديد:\nالاسم: {u_name}\nالهاتف: {u_phone}\nالمشكلة: {u_problem}\nالعنوان: {u_address}"
+                import urllib.parse
+                wa_url = f"https://wa.me/2{COMPANY_PHONE}?text={urllib.parse.quote(order_msg)}"
+                st.markdown(f'<a href="{wa_url}" target="_blank" style="text-decoration:none; background-color:#25D366; color:white; padding:10px; border-radius:5px;">✅ اضغط هنا لتأكيد الطلب عبر واتساب</a>', unsafe_allow_html=True)
