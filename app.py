@@ -111,8 +111,11 @@ def generate_customer_pdf(cust_row, history_df):
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 10, f"Healthy Water: {COMPANY_PHONE}", align='C')
     
-    # حل مشكلة AttributeError: استخدام BytesIO بدلاً من output('S')
-    return pdf.output(dest='S').encode('latin-1', errors='ignore')
+    # حل مشكلة AttributeError وتوافق الترميز
+    pdf_bytes = pdf.output()
+    if isinstance(pdf_bytes, str):
+        return pdf_bytes.encode('latin-1', errors='ignore')
+    return pdf_bytes
 
 # --- 5. نظام الدخول ---
 if 'user_type' not in st.session_state: st.session_state.user_type = None
@@ -135,13 +138,22 @@ if st.session_state.user_type is None:
 # --- 6. واجهة الأدمن ---
 elif st.session_state.user_type == "admin":
     st.sidebar.image(LOGO_PATH, use_column_width=True)
-    menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈"])
-
+    if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
+    
+    # تحديث المنيو بناءً على الاختيار من داخل الصفحات
+    menu = st.sidebar.radio("القائمة", 
+        ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈"],
+        index=["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈"].index(st.session_state.menu_choice)
+    )
+    st.session_state.menu_choice = menu # تحديث الحالة عند الضغط اليدوي)
     # --- صفحة إضافة عميل جديد (طلب رقم 2) ---
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
         with st.form("add_customer_form"):
-            areas_list = ["مدينتي", "بدر", "الشروق", "المستقبل", "الرحاب", "التجمع الاول", "التجمع الخامس", "التجمع الثالث", "مدينة نصر", "مصر الجديدة", "المعادي", "المقطم", "الجيزة", "السيدة عائشة", "العباسية", "الضاهر", "وسط البلد", "الهرم", "حدائق الاهرام", "الشيخ زايد", "6اكتوبر", "شبرا", "قليوب"]
+            # جلب المناطق المسجلة فعلياً في الشيت لضمان ظهور أي منطقة جديدة تضاف
+            existing_areas = sorted(df_c['area'].unique().tolist()) if not df_c.empty else []
+            default_areas = ["مدينتي", "بدر", "الشروق", "المستقبل", "الرحاب", "مدينة نصر"]
+            areas_list = list(set(existing_areas + default_areas))"]
             c1, c2 = st.columns(2)
             name = c1.text_input("الاسم (name)")
             phone = c2.text_input("الهاتف الأساسي (phone)")
@@ -186,7 +198,7 @@ elif st.session_state.user_type == "admin":
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"🗺️ **اللوكيشن:** {r.get('location_url', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
-                    c1.write(f"🔄 **الدورة:** {r.get('cycle', '0')} شهر")
+                    c1.write(f"🔄 **دورة الصيانة:** {r.get('cycle', '0')} شهر")
                     
                     # حساب الموعد القادم (طلب رقم 1)
                     cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
@@ -195,10 +207,16 @@ elif st.session_state.user_type == "admin":
                         next_v = last_v + timedelta(days=to_num(r['cycle'])*30)
                         st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
                     
-                    # أزرار الاتصال
+                   # أزرار الاتصال الملونة
                     phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(r.get(p, '')).strip() != ""]
                     for ph in phones:
-                        st.markdown(f"📞 {ph} [اتصال](tel:{ph}) | [واتساب](https://wa.me/{ph})", unsafe_allow_html=True)
+                        st.markdown(f"""
+                        <div style='display: flex; gap: 10px; align-items: center; margin-bottom: 10px;'>
+                            <b style='min-width: 100px;'>📞 {ph}</b>
+                            <a href='tel:{ph}' style='background-color: #007bff; color: white; padding: 5px 15px; text-decoration: none; border-radius: 5px; font-size: 14px;'>اتصال 📞</a>
+                            <a href='https://wa.me/2{ph}' target='_blank' style='background-color: #25D366; color: white; padding: 5px 15px; text-decoration: none; border-radius: 5px; font-size: 14px;'>واتساب 💬</a>
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     st.divider()
                     
@@ -221,10 +239,11 @@ elif st.session_state.user_type == "admin":
                     else:
                         st.info("لا يوجد سجل صيانات لهذا العميل.")
 
-                    # زر إضافة صيانة من داخل الصفحة (طلب رقم 1)
-                    if st.button("➕ إضافة صيانة لهذا العميل", key=f"add_m_{r['row_index_internal']}"):
+                    # زر إضافة صيانة مع انتقال فوري
+                    if st.button("➕ تسجيل صيانة لهذا العميل", key=f"add_m_{r['row_index_internal']}"):
                         st.session_state.target_customer = r['name']
-                        st.info("انتقل الآن لصفحة 'تسجيل صيانة' - تم اختيار العميل تلقائياً.")
+                        st.session_state.menu_choice = "تسجيل صيانة" # سنعدل الراديو ليقرأ هذه القيمة
+                        st.rerun()
 
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
@@ -294,17 +313,20 @@ elif st.session_state.user_type == "admin":
                 if execute_gsheet_action("append", "Maintenance", data):
                     st.success("تم التسجيل بنجاح!"); st.rerun()
 
-    elif menu == "المخزن 📦":
+   elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
         total_cap = 0
         for i, r in df_inv.iterrows():
-            qty = to_num(r['quantity'])
-            cost = to_num(r['cost_price'])
-            total_cap += (qty * cost)
-            with st.expander(f"{r['item_name']} (الرصيد: {qty})"):
-                st.write(f"سعر التكلفة: {cost} | الحد الأدنى: {r['min_limit']}")
-                st.write(f"إجمالي القيمة: {qty * cost}")
-
+            with st.expander(f"⚙️ {r['item_name']} - الرصيد: {r['quantity']}"):
+                with st.form(f"inv_edit_{i}"):
+                    c1, c2, c3 = st.columns(3)
+                    u_qty = c1.number_input("الكمية", value=to_num(r['quantity']))
+                    u_cost = c2.number_input("التكلفة", value=to_num(r['cost_price']))
+                    u_min = c3.number_input("حد الأمان", value=to_num(r['min_limit']))
+                    total_cap += (u_qty * u_cost)
+                    if st.form_submit_button("تحديث البيانات"):
+                        execute_gsheet_action("update", "Inventory", [r['item_name'], u_qty, u_cost, u_min], row_index=r['row_index_internal'])
+                        st.success("تم التحديث"); st.rerun()
         st.sidebar.metric("إجمالي رأس المال", f"{total_cap} ج.م")
 
     elif menu == "الاحتياجات 🚨": # طلب رقم 4
@@ -349,11 +371,29 @@ elif st.session_state.user_type == "admin":
                 st.success("تم الحفظ")
 
     elif menu == "الأرباح 📈":
-        st.header("📈 تقارير الأرباح")
-        # حساب الأرباح بناءً على العمليات الحقيقية
-        # صافي الربح = (مجموع amount في Maintenance) - (مجموع المصروفات في Expenses + تكلفة الشمعات)
-        st.info("يتم حساب الأرباح بناءً على (الإيرادات - المصروفات المسجلة)")
-        # يمكن إضافة الرسوم البيانية هنا باستخدام plotly كما في الكود السابق
+        st.header("📈 تقارير الأرباح والتحليل المالي")
+        # فلتر الشهر
+        df_m['month'] = df_m['v_date_dt'].dt.strftime('%Y-%m')
+        m_list = sorted(df_m['month'].unique().tolist(), reverse=True)
+        sel_m = st.selectbox("اختر الشهر", m_list)
+        
+        m_data = df_m[df_m['month'] == sel_m]
+        rev = m_data['amount_num'].sum()
+        
+        # حساب التكاليف (الشمعات)
+        cost_parts = 0
+        for _, r in m_data.iterrows():
+            for p in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
+                if str(r.get(p)).lower() in ['true','1']:
+                    p_price = to_num(df_inv[df_inv['item_name'].str.lower()==p.lower()]['cost_price'].values[0]) if p.lower() in df_inv['item_name'].str.lower().values else 0
+                    cost_parts += p_price
+        
+        st.columns(3)[0].metric("إجمالي الإيرادات", f"{rev} ج.م")
+        st.columns(3)[1].metric("تكلفة قطع الغيار", f"{cost_parts} ج.م")
+        st.columns(3)[2].metric("صافي الربح التقديري", f"{rev - cost_parts} ج.م")
+        
+        fig = px.bar(m_data, x='visit_date', y='amount_num', title="الإيرادات اليومية للشهر")
+        st.plotly_chart(fig)
 
 # --- 7. واجهة العميل ---
 elif st.session_state.user_type == "customer":
