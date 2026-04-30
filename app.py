@@ -69,7 +69,6 @@ class PDF_Report(FPDF):
     def footer(self):
         self.set_y(-15)
         try:
-            # محاولة استخدام الخط العربي في الفوتر
             self.add_font('ArabicFont', '', "Arial.ttf")
             self.set_font('ArabicFont', '', 11)
             footer_text = get_display(reshape(f"Healthy Water | للتواصل معنا: {COMPANY_PHONE} 📞 💬"))
@@ -99,34 +98,37 @@ def generate_customer_pdf(cust_row, history_df):
         if not has_arabic: return "".join([c for c in str(text) if ord(c) < 128])
         return get_display(reshape(str(text)))
 
-    # --- الهيدر (اللوجو والعناوين) ---
-    
-    # 1. اللوجو (تكبير للضعف w=90) في أقصى اليسار
+    # --- 1. الهيدر: وضع اللوجو في اليسار كمنطقة محجوزة ---
     try:
+        # اللوجو في أقصى اليسار العلوي (حجم كبير جداً 90mm)
         pdf.image(LOGO_PATH, x=197, y=10, w=90) 
     except: pass
 
-    # 2. ضبط العناوين لتبدأ من اليمين فوق الجدول مباشرة
+    # --- 2. العناوين: في أقصى اليمين (بعيداً تماماً عن منطقة اللوجو) ---
+    # نحدد منطقة الكتابة في اليمين فقط (عرض 150mm من أصل 297mm)
+    pdf.set_xy(10, 15) 
+    
     if has_arabic: pdf.set_font('ArabicFont', '', 24)
     else: pdf.set_font('Arial', 'B', 22)
     
-    pdf.set_xy(10, 15) # البدء من الهامش الأيمن (10 ملم)
-    pdf.cell(0, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
+    # حجز خلية بعرض 150 ملم فقط في جهة اليمين لضمان عدم وصول النص لليسار
+    pdf.cell(150, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
     
     if has_arabic: pdf.set_font('ArabicFont', '', 14)
     else: pdf.set_font('Arial', '', 12)
     
     pdf.set_x(10)
-    pdf.cell(0, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
+    pdf.cell(150, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
     
-    pdf.ln(35) # مسافة أمان تحت اللوجو الكبير والعناوين
+    # مسافة أمان رأسية قبل بدء الجدول لضمان عدم التداخل مع اللوجو
+    pdf.set_y(60) 
 
-    # --- إعداد الجدول (بإضافة خانة القطع الأخرى) ---
-    # الأعمدة الجديدة مع توزيع العرض ليناسب الصفحة (المجموع 277 ملم)
-    cols = ['ملاحظات', 'المبلغ', 'القطع', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
+    # --- 3. إعداد الجدول ---
+    # تغيير اسم "القطع" إلى "أخرى"
+    cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
     widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # رأس الجدول
+    # رأس الجدول (أزرق فاتح)
     pdf.set_fill_color(173, 216, 230) 
     if has_arabic: pdf.set_font('ArabicFont', '', 11)
     
@@ -134,7 +136,7 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    # --- محتوى الجدول ---
+    # --- 4. محتوى الجدول ---
     if has_arabic: pdf.set_font('ArabicFont', '', 10)
     fill = False
     for _, r in history_df.iterrows():
@@ -143,11 +145,11 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', fill)
         pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', fill)
         
-        # خانة "القطع الأخرى"
-        other_part = str(r.get('other', ''))
-        pdf.cell(widths[2], 8, format_ar(other_part), 1, 0, 'C', fill)
+        # خانة "أخرى" (التي تسحب من عمود other)
+        other_val = str(r.get('other', ''))
+        pdf.cell(widths[2], 8, format_ar(other_val), 1, 0, 'C', fill)
         
-        # الشمعات الأساسية
+        # الشمعات
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
             val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C', fill)
