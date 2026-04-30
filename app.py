@@ -186,27 +186,32 @@ if st.session_state.user_type is None:
                         st.error("عذراً، هذا الرقم غير مسجل لدينا.")
 
 # --- 6. واجهة الأدمن ---
-elif st.session_state.user_type == "admin":
-    st.sidebar.image(LOGO_PATH, use_column_width=True)
-    if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
+if st.session_state.user_type == "admin":
+    # 1. عنوان القائمة الجانبية
+    st.sidebar.title("🎛️ لوحة التحكم")
     
-    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️", "اطلب صيانة فوراً ⚙️"]
-    if st.session_state.menu_choice not in admin_options:
-        st.session_state.menu_choice = "بيانات العملاء"
-        # --- إضافة زر تسجيل الخروج في أسفل القائمة الجانبية ---
-st.sidebar.divider() # خط فاصل للتنسيق
-if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
-    # مسح بيانات تسجيل الدخول من ذاكرة التطبيق
-    st.session_state.user_type = None
-    st.session_state.authenticated = False
-    # إعادة تشغيل التطبيق للعودة لصفحة الدخول
-    st.rerun()
+    # 2. قائمة الخيارات الأساسية
+    menu = st.sidebar.selectbox("اختر الصفحة:", admin_options)
+    
+    # 3. فاصل ثم زر تسجيل الخروج (وضعه هنا يضمن ظهوره أسفل القائمة)
+    st.sidebar.divider()
+    if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
+        st.session_state.user_type = None
+        st.session_state.authenticated = False
+        st.rerun()
 
-    menu = st.sidebar.radio(
-        "القائمة", 
-        admin_options,
-        index=admin_options.index(st.session_state.menu_choice)
-    ) 
+    # 4. الآن تبدأ شروط عرض الصفحات (تأكد أنها تبدأ بعد الزر)
+    if menu == "بيانات العملاء":
+        st.header("👥 قاعدة بيانات العملاء")
+        # كود صفحة العملاء...
+        
+    elif menu == "إدارة المنتجات ⚙️":
+        # كود إدارة المنتجات...
+        pass # استبدل pass بكود الصفحة
+
+    elif menu == "المتجر 🛒":
+        # كود المتجر...
+        pass 
     
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
