@@ -274,11 +274,10 @@ elif st.session_state.user_type == "admin":
                     elif next_v < today and d == days_to_show[0]: color = "red" # متأخر يظهر في أول يوم
                     
                     if next_v == d or (next_v < today and d == days_to_show[0]):
-                        st.markdown(f"""
-                        <div style="border-right: 10px solid {color}; padding:10px; background:#f0f2f6; margin-bottom:5px; border-radius:5px">
-                            <b>{cust['name']}</b> | {cust['area']} | 📞 {cust['phone']}
-                        </div>
-                        """, unsafe_allow_html=True)
+                        if st.button(f"👤 {cust['name']} | {cust['area']} | 📞 {cust['phone']}", key=f"sch_{cust['row_index_internal']}"):
+                            st.session_state.search_query = cust['name']
+                            st.session_state.menu_choice = "بيانات العملاء"
+                            st.rerun()
 
     elif menu == "تسجيل صيانة":
         st.header("🔧 تسجيل زيارة صيانة")
