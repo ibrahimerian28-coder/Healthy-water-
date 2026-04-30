@@ -238,8 +238,13 @@ elif st.session_state.user_type == "admin":
                         st.dataframe(display_hist[show_cols], use_container_width=True)
                         
                         if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
-                            pdf_data = generate_customer_pdf(r, cust_hist)
-                            st.download_button("اضغط لبدء التحميل", pdf_data, f"{r['name']}.pdf", "application/pdf")
+    pdf_data = generate_customer_pdf(r, cust_hist)
+    st.download_button(
+        label="اضغط لبدء التحميل",
+        data=pdf_data,
+        file_name=f"{r['name']}.pdf",
+        mime="application/pdf"
+    )
                     else:
                         st.info("لا يوجد سجل صيانات لهذا العميل.")
 
