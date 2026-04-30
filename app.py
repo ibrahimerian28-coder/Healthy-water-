@@ -64,73 +64,69 @@ if not df_exp.empty:
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
+import os
+from arabic_reshaper import reshape
+from bidi.algorithm import get_display
+
 def generate_customer_pdf(cust_row, history_df):
-    # 1. إنشاء كائن PDF يدعم اليونيكود
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # 2. إضافة الخط العربي (تأكد من وجود ملف arial.ttf في مجلد المشروع)
+    # تأكد أن اسم الملف على GitHub مطابق تماماً (حروف كبيرة/صغيرة)
+    font_name = "Arial.ttf" 
+    font_path = os.path.join(os.getcwd(), font_name)
+    
+    has_arabic = False
+    if os.path.exists(font_path):
+        try:
+            pdf.add_font('ArabicFont', '', font_path)
+            pdf.set_font('ArabicFont', '', 14)
+            has_arabic = True
+        except Exception as e:
+            st.error(f"فشل ربط الخط: {e}")
+    else:
+        # هذه الرسالة ستظهر لك في التطبيق إذا لم يجد الملف
+        st.warning(f"تنبيه: ملف الخط {font_name} غير موجود، سيتم استخدام الإنجليزية فقط.")
+
+    def format_ar(text):
+        if not text or str(text).strip() == "": return ""
+        if not has_arabic:
+            return "".join([c for c in str(text) if ord(c) < 128])
+        return get_display(reshape(str(text)))
+
+    if not has_arabic: pdf.set_font("Arial", 'B', 14)
+
+    # كتابة العنوان
     try:
-        # سنحاول تحميل خط عربي، إذا فشل سنعود للخط الافتراضي
-        pdf.add_font('FreeSans', '', 'arial.ttf', unicode=True)
-        pdf.set_font('FreeSans', '', 14)
-        has_arabic_font = True
+        title = f"تقرير صيانة: {cust_row['name']}"
+        pdf.cell(0, 10, format_ar(title), ln=True, align='C')
     except:
         pdf.set_font("Arial", 'B', 14)
-        has_arabic_font = False
+        pdf.cell(0, 10, "Maintenance Report", ln=True, align='C')
 
-    # دالة مساعدة لتنسيق النصوص العربية
-    def format_ar(text):
-        if not has_arabic_font: return str(text)
-        reshaped_text = reshape(str(text)) # تصحيح شكل الحروف
-        bidi_text = get_display(reshaped_text) # عكس الاتجاه ليصبح من اليمين لليسار
-        return bidi_text
-
-    # 3. محاولة إضافة اللوجو
-    try: pdf.image(LOGO_PATH, x=10, y=10, w=30)
-    except: pass
-    
-    # عنوان التقرير
-    pdf.cell(0, 10, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='C')
     pdf.ln(10)
     
-    # 4. إعداد الجدول
-    # ملاحظة: سنرتب الأعمدة من اليمين لليسار لتناسب العربية
+    # رأس الجدول
     cols = ['ملاحظات', 'المبلغ', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
     widths = [100, 20, 15, 15, 15, 15, 15, 15, 15, 30]
     
     pdf.set_fill_color(200, 200, 200)
+    if has_arabic: pdf.set_font('ArabicFont', '', 11)
+    
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
-    
-    # 5. إضافة البيانات
-    pdf.set_font('FreeSans', '', 10) if has_arabic_font else pdf.set_font("Arial", '', 10)
-    
+
+    # محتوى الجدول
     for _, r in history_df.iterrows():
-        # ملاحظة: الترتيب هنا يجب أن يطابق ترتيب cols أعلاه (معكوس)
         pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R')
         pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C')
-        
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
             val = "V" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C')
-            
         pdf.cell(widths[9], 8, str(r['visit_date']), 1, 1, 'C')
 
-    # 6. الإصلاح النهائي لخطأ AttributeError
-    # في النسخ الجديدة، output() تعيد bytearray أو bytes مباشرة إذا لم نحدد ملف
-    pdf_output = pdf.output()
-    
-    # تحويل المخرج إلى Bytes صريحة لـ Streamlit
-    if isinstance(pdf_output, bytearray) or isinstance(pdf_output, bytes):
-        return bytes(pdf_output)
-    else:
-        return str(pdf_output).encode('latin-1', errors='ignore')
-
-# --- 5. نظام الدخول ---
-if 'user_type' not in st.session_state: st.session_state.user_type = None
-
+    return bytes(pdf.output())
 if st.session_state.user_type is None:
     st.title("🚰 Healthy Water System")
     t1, t2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
