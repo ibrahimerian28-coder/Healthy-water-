@@ -348,18 +348,35 @@ if st.session_state.user_type == "customer":
                     unsafe_allow_html=True
                 )
                 # --- واجهة الأدمن ---
+# 1. التأكد من وجود المتغيرات لتجنب الانهيار (AttributeError)
+if 'role' not in st.session_state:
+    st.session_state.role = None
+
+if 'menu' not in st.session_state:
+    st.session_state.menu = "الرئيسية"
+
+# 2. بناء القائمة الجانبية للأدمن
 if st.session_state.role == "admin":
-    menu = st.sidebar.selectbox("القائمة", ["الرئيسية", "بيانات العملاء", "جدول المواعيد", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"])
+    menu_options = ["الرئيسية", "بيانات العملاء", "جدول المواعيد", "تسجيل صيانة", "المصروفات", "الأرباح 📈", "إدارة المنتجات ⚙️", "المتجر 🛒"]
+    
+    # استخدام index لضمان بقاء المستخدم في نفس الصفحة عند الـ Refresh
+    current_index = menu_options.index(st.session_state.menu) if st.session_state.menu in menu_options else 0
+    
+    # تحديث الـ session_state بناءً على اختيار المستخدم من القائمة
+    st.session_state.menu = st.sidebar.selectbox("القائمة 📋", menu_options, index=current_index)
+    menu = st.session_state.menu
 
     st.sidebar.divider()
 
+    # زر تسجيل الخروج (تأكد من تصفير الـ role والـ user_type)
     if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
+        st.session_state.role = None
         st.session_state.user_type = None
+        st.session_state.menu = "الرئيسية"
         st.rerun()
-
-    # --- إضافة عميل ---
-    if menu == "إضافة عميل جديد":
-        st.header("➕ إضافة عميل جديد")
+else:
+    # لو مش أدمن، بنخلي المنيو القيمة الافتراضية عشان الكود اللي تحت ما يضربش
+    menu = st.session_state.menu
 
         with st.form("add_customer_form"):
 
