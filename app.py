@@ -368,22 +368,70 @@ elif st.session_state.user_type == "admin":
         else: st.success("كل الأصناف متوفرة فوق حد الأمان.")
 
     elif menu == "المصروفات":
-        st.header("💵 المصروفات")
-        selected_date = st.date_input("التاريخ", datetime.now())
+        st.header("💵 إدارة المصروفات")
+        
+        # اختيار التاريخ
+        selected_date = st.date_input("تاريخ المصروفات", datetime.now())
+        
+        # --- الجزء الخاص بحساب تكلفة قطع الغيار تلقائياً (للاطلاع فقط) ---
         todays_m = df_m[df_m['v_date_dt'].dt.date == selected_date]
         auto_parts_cost = 0
         for _, m_row in todays_m.iterrows():
             for part in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-                if str(m_row.get(part, '')).lower() in ['true', '1']:
+                if str(m_row.get(part, '')).lower() in ['true', '1', '✅']:
+                    # جلب سعر التكلفة من شيت المخزن
                     price = to_num(df_inv[df_inv['item_name'].str.lower() == part.lower()]['cost_price'].values[0]) if not df_inv[df_inv['item_name'].str.lower() == part.lower()].empty else 0
                     auto_parts_cost += price
-        st.info(f"تكلفة قطع الغيار التلقائية لهذا اليوم: {auto_parts_cost} ج.م")
-        with st.form("exp_form"):
-            trans = st.number_input("انتقالات", 0); neth = st.number_input("نثريات", 0)
-            total_today = auto_parts_cost + trans + neth
-            if st.form_submit_button("حفظ المصروفات"):
-                execute_gsheet_action("append", "Expenses", [str(selected_date), trans, neth, 0, 0, f"Total: {total_today}"])
-                st.success("تم الحفظ")
+        
+        st.info(f"ℹ️ تكلفة قطع الغيار المستهلكة في صيانات اليوم: {auto_parts_cost} ج.م (تُحسب تلقائياً في الأرباح)")
+
+        # --- نموذج إدخال المصروفات الأخرى ---
+        with st.form("exp_form_extended"):
+            st.subheader("تسجيل مصروفات إضافية")
+            c1, c2 = st.columns(2)
+            
+            trans = c1.number_input("انتقالات (transportation)", min_value=0, step=5)
+            neth = c2.number_input("نثريات (sundries)", min_value=0, step=5)
+            
+            monthly = c1.number_input("مصروفات شهرية (monthly_expensess)", min_value=0, step=10)
+            salary = c2.number_input("رواتب (salaries)", min_value=0, step=50)
+            
+            notes = st.text_area("ملاحظات (notes)")
+            
+            # حساب الإجمالي المعروض في الفورم (بدون قطع الغيار لأنها مسجلة بالفعل في شيت الصيانة)
+            total_manual = trans + neth + monthly + salary
+            st.markdown(f"**إجمالي المصروفات اليدوية: {total_manual} ج.م**")
+            
+            if st.form_submit_button("حفظ المصروفات في الشيت"):
+                # الترتيب مطابق لطلبك بالحرف:
+                # 1. date
+                # 2. transportation
+                # 3. sundries
+                # 4. monthly_expensess
+                # 5. salaries
+                # 6. notes
+                exp_data = [
+                    str(selected_date), # date
+                    trans,              # transportation
+                    neth,               # sundries
+                    monthly,            # monthly_expensess
+                    salary,             # salaries
+                    notes               # notes
+                ]
+                
+                if execute_gsheet_action("append", "Expenses", exp_data):
+                    st.success("✅ تم حفظ المصروفات بنجاح")
+                    st.rerun()
+                else:
+                    st.error("❌ فشل الاتصال بالسيرفر، حاول مرة أخرى")
+
+        # --- عرض سجل آخر المصروفات المسجلة ---
+        if not df_exp.empty:
+            st.divider()
+            st.subheader("📅 آخر المصروفات المسجلة")
+            # عرض آخر 10 مصروفات
+            recent_exp = df_exp.tail(10).iloc[::-1]
+            st.dataframe(recent_exp, use_container_width=True, hide_index=True)
 
     elif menu == "الأرباح 📈":
         st.header("📈 تقارير الأرباح")
