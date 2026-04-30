@@ -666,7 +666,3 @@ elif st.session_state.user_type == "admin":
                 
                 st.success("تم تجهيز الطلب بنجاح!")
                 st.link_button("✅ اضغط هنا لإرسال الطلب عبر واتساب", wa_url_maint)
-        
-        with st.form("maintenance_request"):
-            problem = st.selectbox("اختار نوع المشكلة اللي بتواجهك:", [
-                "طلب تغيير شمعات",
