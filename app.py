@@ -62,60 +62,49 @@ if not df_exp.empty:
 
 # --- 4. وظيفة توليد الـ PDF (تصحيح AttributeError وتعديل التنسيق) ---
 def generate_customer_pdf(cust_row, history_df):
-    # استخدام التنسيق الأفقي 'L' كما طلبت
+    # إنشاء كائن الـ PDF - اتجاه أفقي 'L'
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
     # محاولة إضافة اللوجو
-    try: pdf.image(LOGO_PATH, x=10, y=10, w=35)
+    try: pdf.image(LOGO_PATH, x=10, y=10, w=30)
     except: pass
     
     pdf.set_font("Arial", 'B', 16)
-    # تنظيف البيانات لتجنب أخطاء الترميز
-    name_str = str(cust_row['name']).encode('latin-1', 'replace').decode('latin-1')
-    pdf.cell(0, 10, f"Customer Report: {name_str}", ln=True, align='C')
+    # تنظيف الاسم من أي رموز غير مدعومة في Arial الأساسية
+    safe_name = str(cust_row['name']).encode('ascii', 'ignore').decode('ascii') 
+    if not safe_name: safe_name = "Customer Report"
     
-    pdf.set_font("Arial", '', 12)
-    install_date = str(cust_row.get('install_date', ''))
-    pdf.cell(0, 10, f"Installation Date: {install_date}", ln=True, align='L')
-    pdf.ln(5)
+    pdf.cell(0, 10, f"Maintenance Report: {safe_name}", ln=True, align='C')
+    pdf.ln(10)
     
-    # جدول الصيانات
+    # إعداد الجدول
+    pdf.set_font("Arial", 'B', 10)
     cols = ['Date', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'Amt', 'Notes']
     widths = [25, 12, 12, 12, 12, 12, 12, 12, 20, 140]
     
+    # الهيدر
     pdf.set_fill_color(200, 200, 200)
-    pdf.set_font("Arial", 'B', 10)
-    for i, c in enumerate(cols):
-        pdf.cell(widths[i], 10, c, 1, 0, 'C', True)
+    for i, col in enumerate(cols):
+        pdf.cell(widths[i], 10, col, 1, 0, 'C', True)
     pdf.ln()
     
+    # البيانات
     pdf.set_font("Arial", '', 9)
-    fill = False
     for _, r in history_df.iterrows():
-        if fill: pdf.set_fill_color(240, 240, 240)
-        else: pdf.set_fill_color(255, 255, 255)
-        
-        pdf.cell(widths[0], 10, str(r['visit_date']), 1, 0, 'C', True)
+        pdf.cell(widths[0], 8, str(r['visit_date']), 1)
         for part in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-            val = "V" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(12, 10, val, 1, 0, 'C', True)
+            val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
+            pdf.cell(12, 8, val, 1, 0, 'C')
         
-        pdf.cell(widths[8], 10, str(r['amount']), 1, 0, 'C', True)
-        notes_str = str(r['notes'])[:80].encode('latin-1', 'replace').decode('latin-1')
-        pdf.cell(widths[9], 10, notes_str, 1, 1, 'L', True)
-        fill = not fill
+        pdf.cell(widths[8], 8, str(r['amount']), 1, 0, 'C')
+        # تنظيف الملاحظات من الحروف العربية لأن Arial الافتراضية لا تدعمها (تجنباً للانهيار)
+        safe_note = str(r['notes']).encode('ascii', 'ignore').decode('ascii')[:70]
+        pdf.cell(widths[9], 8, safe_note, 1, 1, 'L')
     
-    # الفوتر
-    pdf.set_y(-20)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, f"Healthy Water: {COMPANY_PHONE}", align='C')
-    
-    # حل مشكلة AttributeError وتوافق الترميز
-    pdf_bytes = pdf.output()
-    if isinstance(pdf_bytes, str):
-        return pdf_bytes.encode('latin-1', errors='ignore')
-    return pdf_bytes
+    # --- الجزء الأهم للإصلاح ---
+    # تحويل الـ PDF إلى Bytes IO لضمان قبوله في Streamlit
+    return pdf.output(dest='S').encode('latin-1', errors='ignore')
 
 # --- 5. نظام الدخول ---
 if 'user_type' not in st.session_state: st.session_state.user_type = None
