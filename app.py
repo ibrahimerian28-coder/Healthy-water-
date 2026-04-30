@@ -315,18 +315,44 @@ elif st.session_state.user_type == "admin":
 
     elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
-        total_cap = 0
+        total_inventory_value = 0  # متغير لحساب إجمالي رأس المال الكلي
+        
         for i, r in df_inv.iterrows():
-            with st.expander(f"⚙️ {r['item_name']} - الرصيد: {r['quantity']}"):
+            # تحويل القيم لأرقام مع ضمان التعامل مع الخانات الفارغة كـ 0
+            current_qty = to_num(r.get('quantity', 0))
+            current_cost = to_num(r.get('cost_price', 0))
+            current_min = to_num(r.get('min_limit', 0))
+            
+            # حساب إجمالي قيمة الصنف الحالي
+            item_total_value = current_qty * current_cost
+            total_inventory_value += item_total_value
+            
+            with st.expander(f"⚙️ {r['item_name']} - الرصيد: {current_qty}"):
                 with st.form(f"inv_edit_{i}"):
-                    u_qty = st.number_input("الكمية", value=to_num(r['quantity']))
-                    u_cost = st.number_input("التكلفة", value=to_num(r['cost_price']))
-                    u_min = st.number_input("حد الأمان", value=to_num(r['min_limit']))
-                    total_cap += (u_qty * u_cost)
-                    if st.form_submit_button("تحديث البيانات"):
-                        execute_gsheet_action("update", "Inventory", [r['item_name'], u_qty, u_cost, u_min], row_index=r['row_index_internal'])
-                        st.success("تم التحديث"); st.rerun()
-        st.sidebar.metric("إجمالي رأس المال", f"{total_cap} ج.م")
+                    c1, c2 = st.columns(2)
+                    u_qty = c1.number_input("الكمية المتوفرة", value=current_qty, key=f"qty_{i}")
+                    u_cost = c2.number_input("سعر التكلفة (للوحدة)", value=current_cost, key=f"cost_{i}")
+                    u_min = c1.number_input("حد الأمان (Min Limit)", value=current_min, key=f"min_{i}")
+                    
+                    # عرض إجمالي قيمة هذا الصنف فقط داخل الفورم
+                    st.info(f"💰 إجمالي قيمة المخزون من هذا الصنف: {u_qty * u_cost} ج.م")
+                    
+                    if st.form_submit_button("تحديث بيانات الصنف"):
+                        updated_data = [r['item_name'], u_qty, u_cost, u_min]
+                        if execute_gsheet_action("update", "Inventory", updated_data, row_index=r['row_index_internal']):
+                            st.success(f"تم تحديث {r['item_name']} بنجاح")
+                            st.rerun()
+
+        # --- عرض إجمالي رأس المال في نهاية الصفحة ---
+        st.divider()
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.subheader("💰 إجمالي قيمة البضاعة في المخزن (رأس المال):")
+        with c2:
+            st.metric(label="القيمة الكلية", value=f"{total_inventory_value} ج.م")
+            
+        # تحديث قيمة السايدبار أيضاً لضمان المطابقة
+        st.sidebar.metric("إجمالي رأس المال", f"{total_inventory_value} ج.م")
 
     elif menu == "الاحتياجات 🚨":
         st.header("🚨 أصناف تحت حد الأمان")
