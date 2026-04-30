@@ -574,7 +574,7 @@ elif st.session_state.user_type == "admin":
                 st.session_state.view_cart = True
         
         # 3. تحميل البيانات
-        STORE_GID = "1168172935" # تأكد من مطابقة هذا الرقم لصفحة Store_Products
+        STORE_GID = "1129472026" # تأكد من مطابقة هذا الرقم لصفحة Store_Products
         df_store = load_data(STORE_GID)
         
         if df_store is None or df_store.empty:
