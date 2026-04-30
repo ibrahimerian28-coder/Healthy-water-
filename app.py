@@ -646,8 +646,26 @@ elif st.session_state.user_type == "admin":
                 st.session_state.cart = []
                 st.rerun()
 
-    elif menu == "اطلب صيانة فوراً ⚙️":
+   elif menu == "اطلب صيانة فوراً ⚙️":
         st.header("⚙️ اطلب صيانة فوراً")
+        
+        with st.form("maintenance_request"):
+            problem = st.selectbox("اختار نوع المشكلة اللي بتواجهك:", [
+                "طلب تغيير شمعات", 
+                "تسريب مياه", 
+                "تغير في طعم أو لون المياه", 
+                "عطل في الموتور أو المضخة",
+                "أخرى"
+            ])
+            notes = st.text_area("ملاحظات إضافية أو تفاصيل العطل (اختياري)")
+            
+            # زر الإرسال الإجباري لأي فورم في Streamlit
+            if st.form_submit_button("تأكيد وإرسال الطلب"):
+                msg_maintenance = f"طلب صيانة فورية:\nنوع المشكلة: {problem}\nملاحظات: {notes}"
+                wa_url_maint = f"https://wa.me/2{COMPANY_PHONE}?text={msg_maintenance}"
+                
+                st.success("تم تجهيز الطلب بنجاح!")
+                st.link_button("✅ اضغط هنا لإرسال الطلب عبر واتساب", wa_url_maint)
         
         with st.form("maintenance_request"):
             problem = st.selectbox("اختار نوع المشكلة اللي بتواجهك:", [
