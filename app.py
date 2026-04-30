@@ -562,11 +562,64 @@ elif st.session_state.user_type == "admin":
             df_all_y = pd.DataFrame(all_years_data)
             st.plotly_chart(px.bar(df_all_y, x="السنة", y="إجمالي الربح", title="مقارنة الأرباح السنوية"))
 
-elif st.session_state.user_type == "customer":
-    st.title("👋 أهلاً بك")
-    for _, row in st.session_state.customer_data.iterrows():
-        st.subheader(f"العميل: {row['name']}")
-        my_m = df_m[df_m['name'] == row['name']].sort_values('v_date_dt', ascending=False)
-        if not my_m.empty: st.table(my_m[['visit_date', 'notes']])
-        st.link_button("📞 اتصال هاتفي", f"tel:{COMPANY_PHONE}")
-    if st.button("خروج"): st.session_state.user_type = None; st.rerun()
+# هذا الكود يوضع في الجزء المخصص لعرض واجهة العميل بعد التحقق من session_state.user_type == "customer"
+
+if st.session_state.user_type == "customer":
+    st.header(f"👋 أهلاً بك")
+    
+    # جلب كافة السجلات المرتبطة برقم الهاتف الذي سجل به العميل
+    customer_records = st.session_state.customer_data
+    
+    st.info(f"تم العثور على ({len(customer_records)}) أجهزة مسجلة برقمك.")
+
+    # تكرار العرض لكل جهاز (عميل) مرتبط بنفس الرقم
+    for _, cust in customer_records.iterrows():
+        with st.container():
+            # إطار مميز لكل جهاز
+            st.markdown(f"### 🖥️ بيانات الجهاز: {cust['name']}")
+            
+            # 1. عرض البيانات الأساسية للعميل
+            c1, c2, c3 = st.columns(3)
+            c1.write(f"📍 **المنطقة:** {cust.get('area', 'غير محدد')}")
+            c2.write(f"🏠 **العنوان:** {cust.get('adress', 'غير محدد')}")
+            c3.write(f"📅 **تاريخ التركيب:** {cust.get('install_date', 'غير محدد')}")
+            
+            c1.write(f"📞 **الهاتف:** {cust.get('phone', '-')}")
+            c2.write(f"⚙️ **دورة الصيانة:** كل {cust.get('cycle', '-')} شهور")
+            c3.write(f"🔔 **الحالة:** {cust.get('status', 'نشط')}")
+            
+            st.divider()
+
+            # 2. جلب وعرض جدول الصيانات الخاص بهذا الجهاز تحديداً
+            st.subheader(f"🛠️ سجل الصيانات لـ {cust['name']}")
+            
+            # فلترة جدول الصيانات بناءً على اسم العميل (أو المعرف الخاص به)
+            cust_hist = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt', ascending=False)
+            
+            if not cust_hist.empty:
+                # تجهيز الجدول للعرض بشكل جمالي (تحويل القيم لعلامات صح وخطأ)
+                display_hist = cust_hist.copy()
+                check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
+                
+                for col in check_cols:
+                    if col in display_hist.columns:
+                        display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
+                
+                # تحديد الأعمدة التي تظهر للعميل (بدون التكلفة مثلاً لخصوصية الإدارة)
+                show_cols = ['visit_date'] + check_cols + ['notes']
+                st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
+                
+                # إتاحة تحميل ملف PDF للصيانة لهذا الجهاز
+                if st.button(f"📄 تحميل تقرير PDF لـ {cust['name']}", key=f"pdf_btn_{cust['row_index_internal']}"):
+                    pdf_data = generate_customer_pdf(cust, cust_hist)
+                    st.download_button(label="اضغط هنا لبدء التحميل", data=pdf_data, file_name=f"صيانة_{cust['name']}.pdf", mime="application/pdf")
+            else:
+                st.warning("لا يوجد سجل صيانات مسجل لهذا الجهاز حتى الآن.")
+            
+            st.markdown("---") # فاصل بين الأجهزة المختلفة
+
+    # زر تسجيل الخروج
+    if st.sidebar.button("تسجيل الخروج"):
+        st.session_state.user_type = None
+        st.session_state.customer_data = None
+        st.rerun()
