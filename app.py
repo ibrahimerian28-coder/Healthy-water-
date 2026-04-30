@@ -58,7 +58,7 @@ def parse_dt(val):
 def read_gsheet(sheet_name):
     gids = {"Store_Products": "123456789"}
     return load_data(gids.get(sheet_name, "0"))
-    def calculate_day_cogs(target_date):
+def calculate_day_cogs(target_date):
     if df_m.empty or df_inv.empty:
         return 0
     day_maint = df_m[df_m['v_date_dt'].dt.date == target_date]
