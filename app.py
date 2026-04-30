@@ -191,10 +191,11 @@ if st.session_state.user_type == "admin":
     st.sidebar.title("🎛️ لوحة التحكم")
     
     # 2. قائمة الخيارات الأساسية
-    menu = st.sidebar.selectbox("اختر الصفحة:", admin_options)
     # تأكد أن هذا الجزء فوق سطر menu = st.sidebar.selectbox
 admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️", "اطلب صيانة فوراً ⚙️"]
-    
+    menu = st.sidebar.selectbox("اختر الصفحة:", admin_options)
+    # تأكد أن هذا الجزء فوق سطر menu = st.sidebar.selectbox
+
     # 3. فاصل ثم زر تسجيل الخروج (وضعه هنا يضمن ظهوره أسفل القائمة)
     st.sidebar.divider()
     if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
