@@ -145,15 +145,17 @@ elif st.session_state.user_type == "admin":
         ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈"],
         index=["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈"].index(st.session_state.menu_choice)
     )
-    st.session_state.menu_choice = menu # تحديث الحالة عند الضغط اليدوي)
-    # --- صفحة إضافة عميل جديد (طلب رقم 2) ---
+    st.session_state.menu_choice = menu # تحديث الحالة عند الضغط اليدوي
+    
+    # --- صفحة إضافة عميل جديد ---
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
         with st.form("add_customer_form"):
             # جلب المناطق المسجلة فعلياً في الشيت لضمان ظهور أي منطقة جديدة تضاف
             existing_areas = sorted(df_c['area'].unique().tolist()) if not df_c.empty else []
             default_areas = ["مدينتي", "بدر", "الشروق", "المستقبل", "الرحاب", "مدينة نصر"]
-            areas_list = list(set(existing_areas + default_areas))"]
+            areas_list = list(set(existing_areas + default_areas))
+            
             c1, c2 = st.columns(2)
             name = c1.text_input("الاسم (name)")
             phone = c2.text_input("الهاتف الأساسي (phone)")
@@ -192,7 +194,6 @@ elif st.session_state.user_type == "admin":
             for _, r in group.iterrows():
                 with st.expander(f"👤 {r['name']} | 📞 {r['phone']}"):
                     c1, c2 = st.columns(2)
-                    # عرض البيانات مع معالجة "غير مسجل" (تصحيح طلب رقم 1)
                     addr = r.get('adress', '')
                     c1.write(f"🏠 **العنوان:** {addr if addr else 'غير مسجل'}")
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
@@ -200,7 +201,7 @@ elif st.session_state.user_type == "admin":
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
                     c1.write(f"🔄 **دورة الصيانة:** {r.get('cycle', '0')} شهر")
                     
-                    # حساب الموعد القادم (طلب رقم 1)
+                    # حساب الموعد القادم
                     cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
                     if not cust_hist.empty:
                         last_v = cust_hist.iloc[0]['v_date_dt']
@@ -220,68 +221,53 @@ elif st.session_state.user_type == "admin":
                     
                     st.divider()
                     
-                    # جدول الصيانات (تصحيح الـ X والـ Check)
                     st.write("🛠️ **سجل الصيانات:**")
                     if not cust_hist.empty:
-                        # تحويل True/False إلى رموز
                         display_hist = cust_hist.copy()
                         for col in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
                             display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1'] else "❌")
                         
-                        # الأعمدة المطلوبة بالترتيب
                         show_cols = ['visit_date', 'P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared', 'other', 'amount', 'notes']
                         st.dataframe(display_hist[show_cols], use_container_width=True)
                         
-                        # أزرار الـ PDF والحذف
                         if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
                             pdf_data = generate_customer_pdf(r, cust_hist)
                             st.download_button("اضغط لبدء التحميل", pdf_data, f"{r['name']}.pdf", "application/pdf")
                     else:
                         st.info("لا يوجد سجل صيانات لهذا العميل.")
 
-                    # زر إضافة صيانة مع انتقال فوري
                     if st.button("➕ تسجيل صيانة لهذا العميل", key=f"add_m_{r['row_index_internal']}"):
                         st.session_state.target_customer = r['name']
-                        st.session_state.menu_choice = "تسجيل صيانة" # سنعدل الراديو ليقرأ هذه القيمة
+                        st.session_state.menu_choice = "تسجيل صيانة" 
                         st.rerun()
 
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
         today = datetime.now().date()
-        # توليد 7 أيام متتالية مع استثناء الجمعة
         days_to_show = []
         curr = today
         while len(days_to_show) < 7:
-            if curr.weekday() != 4: # 4 هو الجمعة
+            if curr.weekday() != 4: # استثناء الجمعة
                 days_to_show.append(curr)
             curr += timedelta(days=1)
         
         for d in days_to_show:
             st.subheader(f"📆 {d.strftime('%A, %Y-%m-%d')}")
-            # منطق الفلترة المتقدم (طلب رقم 2)
-            day_list = []
             for _, cust in df_c[df_c['status'] == "نشط"].iterrows():
                 last_m_all = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt')
                 if not last_m_all.empty:
                     last_m = last_m_all.iloc[-1]
-                    # حساب الموعد (عادي أو استثنائي)
                     spec_date = parse_dt(last_m.get('special_date', ""))
                     next_v = spec_date.date() if spec_date else (last_m['v_date_dt'] + timedelta(days=to_num(cust['cycle'])*30)).date()
                     
-                    # تحديد الحالة واللون
-                    color = ""
-                    if next_v == d: color = "yellow"
-                    elif next_v < today and d == days_to_show[0]: color = "red" # متأخر يظهر في أول يوم
-                    
                     if next_v == d or (next_v < today and d == days_to_show[0]):
-                        if st.button(f"👤 {cust['name']} | {cust['area']} | 📞 {cust['phone']}", key=f"sch_{cust['row_index_internal']}"):
+                        if st.button(f"👤 {cust['name']} | {cust['area']} | 📞 {cust['phone']}", key=f"sch_{cust['row_index_internal']}_{d}"):
                             st.session_state.search_query = cust['name']
                             st.session_state.menu_choice = "بيانات العملاء"
                             st.rerun()
 
     elif menu == "تسجيل صيانة":
         st.header("🔧 تسجيل زيارة صيانة")
-        # العميل المختار من صفحة العملاء
         default_idx = 0
         if 'target_customer' in st.session_state:
             try: default_idx = df_c['name'].tolist().index(st.session_state.target_customer)
@@ -297,7 +283,6 @@ elif st.session_state.user_type == "admin":
             mem = c1.checkbox("Membrane"); post = c2.checkbox("Post Carbon")
             calc = c3.checkbox("Calcite"); infra = c1.checkbox("Infrared")
             
-            # قائمة منسدلة للأصناف الأخرى (طلب رقم 3)
             other_items = df_inv[~df_inv['item_name'].isin(['p1','p2','p3','membrane','post carbon','calcite','infrared'])]['item_name'].tolist()
             other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + other_items)
             
@@ -306,13 +291,12 @@ elif st.session_state.user_type == "admin":
             spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
             
             if st.form_submit_button("حفظ الزيارة"):
-                # استخراج ID العميل تلقائياً
-                cid = df_c[df_c['name'] == selected_name]['phone'].values[0] # نستخدم الفون كمعرف
+                cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
                 data = [selected_name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_choice, amt, nts, str(spec_d) if spec_d else "", cid]
                 if execute_gsheet_action("append", "Maintenance", data):
                     st.success("تم التسجيل بنجاح!"); st.rerun()
 
-   elif menu == "المخزن 📦":
+    elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
         total_cap = 0
         for i, r in df_inv.iterrows():
@@ -328,7 +312,7 @@ elif st.session_state.user_type == "admin":
                         st.success("تم التحديث"); st.rerun()
         st.sidebar.metric("إجمالي رأس المال", f"{total_cap} ج.م")
 
-    elif menu == "الاحتياجات 🚨": # طلب رقم 4
+    elif menu == "الاحتياجات 🚨":
         st.header("🚨 أصناف تحت حد الأمان")
         needs = df_inv[df_inv['quantity'].apply(to_num) <= df_inv['min_limit'].apply(to_num)]
         if not needs.empty:
@@ -338,16 +322,12 @@ elif st.session_state.user_type == "admin":
 
     elif menu == "المصروفات":
         st.header("💵 المصروفات")
-        # حساب أوتوماتيكي لتكلفة قطع الغيار (طلب رقم 5)
         selected_date = st.date_input("التاريخ", datetime.now())
-        
-        # البحث عن صيانات اليوم وحساب تكلفتها
         todays_m = df_m[df_m['v_date_dt'].dt.date == selected_date]
         auto_parts_cost = 0
         for _, m_row in todays_m.iterrows():
             for part in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
                 if str(m_row.get(part, '')).lower() in ['true', '1']:
-                    # جلب السعر من المخزن
                     price = to_num(df_inv[df_inv['item_name'].str.lower() == part.lower()]['cost_price'].values[0]) if not df_inv[df_inv['item_name'].str.lower() == part.lower()].empty else 0
                     auto_parts_cost += price
         
@@ -364,35 +344,31 @@ elif st.session_state.user_type == "admin":
             st.write(f"**إجمالي المصروفات:** {total_today}")
             
             if st.form_submit_button("حفظ المصروفات"):
-                # يتم الحفظ في شيت Expenses
-                # الأعمدة: date, transportation, sundries, monthly_expensess, salaries, notes (سجلنا فيها التوتال مؤقتاً)
                 execute_gsheet_action("append", "Expenses", [str(selected_date), trans, neth, month_exp, salaries, f"Total: {total_today}"])
                 st.success("تم الحفظ")
 
     elif menu == "الأرباح 📈":
         st.header("📈 تقارير الأرباح والتحليل المالي")
-        # فلتر الشهر
         df_m['month'] = df_m['v_date_dt'].dt.strftime('%Y-%m')
         m_list = sorted(df_m['month'].unique().tolist(), reverse=True)
-        sel_m = st.selectbox("اختر الشهر", m_list)
-        
-        m_data = df_m[df_m['month'] == sel_m]
-        rev = m_data['amount_num'].sum()
-        
-        # حساب التكاليف (الشمعات)
-        cost_parts = 0
-        for _, r in m_data.iterrows():
-            for p in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-                if str(r.get(p)).lower() in ['true','1']:
-                    p_price = to_num(df_inv[df_inv['item_name'].str.lower()==p.lower()]['cost_price'].values[0]) if p.lower() in df_inv['item_name'].str.lower().values else 0
-                    cost_parts += p_price
-        
-        st.columns(3)[0].metric("إجمالي الإيرادات", f"{rev} ج.م")
-        st.columns(3)[1].metric("تكلفة قطع الغيار", f"{cost_parts} ج.م")
-        st.columns(3)[2].metric("صافي الربح التقديري", f"{rev - cost_parts} ج.م")
-        
-        fig = px.bar(m_data, x='visit_date', y='amount_num', title="الإيرادات اليومية للشهر")
-        st.plotly_chart(fig)
+        if m_list:
+            sel_m = st.selectbox("اختر الشهر", m_list)
+            m_data = df_m[df_m['month'] == sel_m]
+            rev = m_data['amount_num'].sum()
+            
+            cost_parts = 0
+            for _, r in m_data.iterrows():
+                for p in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
+                    if str(r.get(p)).lower() in ['true','1']:
+                        p_price = to_num(df_inv[df_inv['item_name'].str.lower()==p.lower()]['cost_price'].values[0]) if p.lower() in df_inv['item_name'].str.lower().values else 0
+                        cost_parts += p_price
+            
+            st.columns(3)[0].metric("إجمالي الإيرادات", f"{rev} ج.م")
+            st.columns(3)[1].metric("تكلفة قطع الغيار", f"{cost_parts} ج.م")
+            st.columns(3)[2].metric("صافي الربح التقديري", f"{rev - cost_parts} ج.م")
+            
+            fig = px.bar(m_data, x='visit_date', y='amount_num', title="الإيرادات اليومية للشهر")
+            st.plotly_chart(fig)
 
 # --- 7. واجهة العميل ---
 elif st.session_state.user_type == "customer":
@@ -401,7 +377,6 @@ elif st.session_state.user_type == "customer":
         st.subheader(f"العميل: {row['name']}")
         st.write(f"العنوان: {row['adress']}")
         
-        # عرض الصيانات الخاصة به فقط
         my_m = df_m[df_m['name'] == row['name']].sort_values('v_date_dt', ascending=False)
         st.write("**🔧 سجل الصيانات الخاص بك:**")
         if not my_m.empty:
