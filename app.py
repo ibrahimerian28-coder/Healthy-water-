@@ -558,71 +558,119 @@ elif st.session_state.user_type == "admin":
                     if execute_gsheet_action("append", "Store_Products", new_prod):
                         st.success("تم إضافة المنتج بنجاح مع الصور!"); st.rerun()
 
-    # --- 8. المتجر 🛒 (نسخة الربط المباشر) ---
+    # --- 8. المتجر 🛒 (النظام المتكامل: سلة + دفع + إجمالي) ---
     elif menu == "المتجر 🛒":
         st.header("🛒 متجر Healthy Water")
         
-        # إجبار التطبيق على إعادة قراءة البيانات من الشيت عند دخول هذه الصفحة
-        # استبدل '1168172935' بالرقم الذي استخرجته من الرابط في الخطوة السابقة
-        STORE_GID = "1129472026" 
+        # 1. تهيئة سلة التسوق في الذاكرة (Session State)
+        if 'cart' not in st.session_state:
+            st.session_state.cart = []
+
+        # 2. أيقونة السلة في الأعلى
+        cart_count = sum(item['quantity'] for item in st.session_state.cart)
+        col_header, col_cart = st.columns([0.8, 0.2])
+        with col_cart:
+            if st.button(f"🛒 السلة ({cart_count})"):
+                st.session_state.view_cart = True
         
-        try:
-            # تحديث البيانات لحظياً
-            df_store = load_data(STORE_GID) 
+        # 3. تحميل البيانات
+        STORE_GID = "1168172935" # تأكد من مطابقة هذا الرقم لصفحة Store_Products
+        df_store = load_data(STORE_GID)
+        
+        if df_store is None or df_store.empty:
+            st.error("لم يتم العثور على بيانات في المتجر.")
+        else:
+            df_store.columns = df_store.columns.str.strip()
             
-            if df_store is None or df_store.empty:
-                st.error("لم يتم العثور على بيانات في شيت المتجر. تأكد من وجود أعمدة: Title, Price, Category, Images")
-            else:
-                # تنظيف الأعمدة
-                df_store.columns = df_store.columns.str.strip()
-                
-                # عرض الأقسام
-                tab1, tab2 = st.tabs(["💧 أجهزة العمر الطويل", "🛡️ شمع أصلي ..وبس!"])
-                
-                with tab1:
-                    devices = df_store[df_store['Category'].str.contains('أجهزة', na=False)]
-                    if devices.empty:
-                        st.info("لا توجد أجهزة مضافة حالياً")
-                    else:
-                        cols = st.columns(2)
-                        for i, (_, row) in enumerate(devices.iterrows()):
-                            with cols[i % 2]:
-                                imgs = str(row['Images']).split("||")
-                                st.image(imgs[0], use_column_width=True)
-                                st.subheader(row['Title'])
-                                st.write(f"**السعر:** {row['Price']} ج.م")
-                                if st.button("تفاصيل المنتج", key=f"dev_{i}"):
-                                    st.session_state.selected_prod = row
-                
-                with tab2:
-                    parts = df_store[df_store['Category'].str.contains('شمعات', na=False)]
-                    if parts.empty:
-                        st.info("لا توجد شمعات مضافة حالياً")
-                    else:
-                        cols_p = st.columns(2)
-                        for i, (_, row) in enumerate(parts.iterrows()):
-                            with cols_p[i % 2]:
-                                imgs = str(row['Images']).split("||")
-                                st.image(imgs[0], use_column_width=True)
-                                st.subheader(row['Title'])
-                                st.write(f"**السعر:** {row['Price']} ج.م")
-                                if st.button("تفاصيل المنتج", key=f"part_{i}"):
-                                    st.session_state.selected_prod = row
+            # عرض الأقسام (Tabs)
+            t1, t2 = st.tabs(["💧 الأجهزة", "🛡️ الشمعات"])
+            
+            def show_products(filtered_df):
+                cols = st.columns(2)
+                for i, (_, row) in enumerate(filtered_df.iterrows()):
+                    with cols[i % 2]:
+                        imgs = str(row['Images']).split("||")
+                        st.image(imgs[0], use_column_width=True)
+                        st.subheader(row['Title'])
+                        st.write(f"**السعر:** {row['Price']} ج.م")
+                        
+                        # أزرار الإضافة للسلة
+                        if st.button("➕ أضف للسلة", key=f"add_{row['row_index_internal']}"):
+                            # التحقق إذا كان المنتج موجود مسبقاً لزيادة الكمية
+                            found = False
+                            for item in st.session_state.cart:
+                                if item['Title'] == row['Title']:
+                                    item['quantity'] += 1
+                                    found = True
+                                    break
+                            if not found:
+                                st.session_state.cart.append({
+                                    'Title': row['Title'],
+                                    'Price': row['Price'],
+                                    'quantity': 1
+                                })
+                            st.toast(f"تم إضافة {row['Title']} للسلة")
+                            st.rerun()
 
-                # عرض نافذة التفاصيل إذا تم الاختيار
-                if st.session_state.get('selected_prod') is not None:
-                    p = st.session_state.selected_prod
-                    st.divider()
-                    st.info(f"عرض تفاصيل: {p['Title']}")
-                    all_p_imgs = str(p['Images']).split("||")
-                    st.image(all_p_imgs, width=120)
-                    st.write(f"**وصف المنتج:**\n{p['Description']}")
-                    if st.button("إغلاق العرض"):
-                        st.session_state.selected_prod = None
-                        st.rerun()
+            with t1:
+                show_products(df_store[df_store['Category'].str.contains('أجهزة', na=False)])
+            with t2:
+                show_products(df_store[df_store['Category'].str.contains('شمعات', na=False)])
 
-        except Exception as e:
-            st.error(f"حدث خطأ أثناء تحميل المتجر: {e}")
+        # --- نافذة سلة التسوق (عرض المشتريات) ---
+        if st.session_state.get('view_cart', False):
+            with st.sidebar:
+                st.header("🛒 مشترياتك")
+                if not st.session_state.cart:
+                    st.write("السلة فارغة حالياً")
+                else:
+                    total_price = 0
+                    for index, item in enumerate(st.session_state.cart):
+                        subtotal = int(item['Price']) * item['quantity']
+                        total_price += subtotal
+                        st.write(f"**{item['Title']}**")
+                        st.write(f"{item['quantity']} × {item['Price']} = {subtotal} ج.م")
+                        if st.button("❌ حذف", key=f"del_{index}"):
+                            st.session_state.cart.pop(index)
+                            st.rerun()
+                        st.divider()
+                    
+                    # عرض الإجمالي في خانة مميزة
+                    st.success(f"**الإجمالي: {total_price} ج.م**")
+                    
+                    # خيارات الدفع وإتمام الطلب
+                    st.subheader("💳 تفاصيل الدفع والطلب")
+                    pay_method = st.radio("طريقة الدفع المفضلة:", ["عند الاستلام", "فودافون كاش / انستا باي"])
+                    
+                    cust_name = st.text_input("الاسم لزوم التوصيل")
+                    cust_address = st.text_input("عنوان التوصيل بالتفصيل")
+                    
+                    if st.button("✅ تأكيد الطلب عبر واتساب"):
+                        if not cust_name or not cust_address:
+                            st.error("يرجى إدخال الاسم والعنوان")
+                        else:
+                            # بناء نص الرسالة المنظم
+                            order_details = ""
+                            for item in st.session_state.cart:
+                                order_details += f"- {item['Title']} (عدد {item['quantity']})\n"
+                            
+                            final_msg = (
+                                f"طلب شراء جديد من المتجر 🛒\n"
+                                f"--------------------------\n"
+                                f"👤 العميل: {cust_name}\n"
+                                f"📍 العنوان: {cust_address}\n"
+                                f"💰 الإجمالي: {total_price} ج.م\n"
+                                f"💳 طريقة الدفع: {pay_method}\n"
+                                f"📦 المنتجات:\n{order_details}"
+                            )
+                            
+                            import urllib.parse
+                            wa_url = f"https://wa.me/2{COMPANY_PHONE}?text={urllib.parse.quote(final_msg)}"
+                            st.markdown(f'<a href="{wa_url}" target="_blank" style="text-decoration:none; background-color:#25D366; color:white; padding:12px; border-radius:8px; display:block; text-align:center;">إرسال الطلب الآن 📲</a>', unsafe_allow_html=True)
+                
+                if st.button("إغلاق السلة"):
+                    st.session_state.view_cart = False
+                    st.rerun()
             
             # عرض الشمعات
             st.subheader("🛡️ شمع أصلي ..وبس!")
