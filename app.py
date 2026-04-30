@@ -434,22 +434,111 @@ elif st.session_state.user_type == "admin":
             st.dataframe(recent_exp, use_container_width=True, hide_index=True)
 
     elif menu == "الأرباح 📈":
-        st.header("📈 تقارير الأرباح")
-        df_m['month'] = df_m['v_date_dt'].dt.strftime('%Y-%m')
-        m_list = sorted(df_m['month'].unique().tolist(), reverse=True)
-        if m_list:
-            sel_m = st.selectbox("اختر الشهر", m_list)
-            m_data = df_m[df_m['month'] == sel_m]
-            rev = m_data['amount_num'].sum()
-            cost_parts = 0
-            for _, r in m_data.iterrows():
-                for p in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-                    if str(r.get(p)).lower() in ['true','1']:
-                        p_price = to_num(df_inv[df_inv['item_name'].str.lower()==p.lower()]['cost_price'].values[0]) if p.lower() in df_inv['item_name'].str.lower().values else 0
-                        cost_parts += p_price
-            st.metric("إجمالي الإيرادات", f"{rev} ج.م")
-            st.metric("صافي الربح التقديري", f"{rev - cost_parts} ج.م")
-            st.plotly_chart(px.bar(m_data, x='visit_date', y='amount_num'))
+        st.header("📈 تقارير صافي الأرباح")
+
+        # --- 1. دالة موحدة لحساب صافي ربح أي يوم ---
+        def get_daily_net(target_date):
+            # تحويل target_date إلى datetime date إذا كان نصاً
+            if isinstance(target_date, str):
+                target_date = pd.to_datetime(target_date).date()
+            
+            # إجمالي الإيرادات (Amount) من شيت الصيانات
+            day_rev = 0
+            if not df_m.empty and 'v_date_dt' in df_m.columns:
+                day_m = df_m[df_m['v_date_dt'].dt.date == target_date]
+                day_rev = day_m['amount_num'].sum()
+            
+            # إجمالي المصروفات من شيت المصروفات
+            day_exp_total = 0
+            if not df_exp.empty and 'exp_date_dt' in df_exp.columns:
+                day_ex = df_exp[df_exp['exp_date_dt'].dt.date == target_date]
+                # جمع كل أعمدة المصروفات (trans, sundries, monthly, salaries)
+                for col in ['transportation', 'sundries', 'monthly_expensess', 'salaries']:
+                    if col in day_ex.columns:
+                        day_exp_total += day_ex[col].apply(to_num).sum()
+            
+            return day_rev - day_exp_total
+
+        # --- 2. صافي الربح اليومي ---
+        st.subheader("🗓️ صافي الربح اليومي")
+        sel_day = st.date_input("اختر التاريخ", datetime.now())
+        daily_net = get_daily_net(sel_day)
+        st.metric(f"صافي ربح يوم {sel_day}", f"{daily_net} ج.م")
+
+        st.divider()
+
+        # --- 3. صافي الربح الأسبوعي ---
+        st.subheader("📅 صافي الربح الأسبوعي (آخر 7 أيام)")
+        end_date = datetime.now().date()
+        week_days = [end_date - timedelta(days=i) for i in range(7)]
+        weekly_net = sum([get_daily_net(d) for d in week_days])
+        st.metric("إجمالي ربح الـ 7 أيام الماضية", f"{weekly_net} ج.م")
+
+        st.divider()
+
+        # --- 4. صافي الربح الشهري ---
+        st.subheader("📊 صافي الربح الشهري")
+        c1, c2 = st.columns(2)
+        sel_year_m = c1.selectbox("السنة", range(2024, 2030), index=2) # 2026
+        sel_month = c2.selectbox("الشهر", range(1, 13), index=datetime.now().month - 1)
+        
+        # حساب أيام الشهر المختار
+        import calendar
+        num_days = calendar.monthrange(sel_year_m, sel_month)[1]
+        month_days = [datetime(sel_year_m, sel_month, d).date() for d in range(1, num_days + 1)]
+        monthly_net = sum([get_daily_net(d) for d in month_days])
+        st.metric(f"إجمالي أرباح شهر {sel_month} - {sel_year_m}", f"{monthly_net} ج.م")
+
+        st.divider()
+
+        # --- 5. إجمالي صافي الربح السنوي ---
+        st.subheader("🏢 إجمالي صافي الربح السنوي")
+        sel_year_y = st.selectbox("اختر السنة المرجعية", range(2024, 2030), index=2)
+        
+        yearly_net = 0
+        # حساب الربح لكل شهر في السنة المختارة
+        for m in range(1, 13):
+            m_days = calendar.monthrange(sel_year_y, m)[1]
+            yearly_net += sum([get_daily_net(datetime(sel_year_y, m, d).date()) for d in range(1, m_days + 1)])
+        
+        st.metric(f"صافي أرباح سنة {sel_year_y} كاملة", f"{yearly_net} ج.م")
+
+        st.divider()
+
+        # --- 6. قسم الرسوم البيانية ---
+        st.subheader("📈 قسم الرسوم البيانية")
+        chart_tab1, chart_tab2, chart_tab3 = st.tabs(["مقارنة أيام الشهر", "مقارنة شهور السنة", "مقارنة السنوات"])
+
+        with chart_tab1:
+            # رسم بياني لأيام الشهر الحالي المختار أعلاه
+            m_data = []
+            for d in month_days:
+                m_data.append({"التاريخ": str(d), "الربح": get_daily_net(d)})
+            df_m_chart = pd.DataFrame(m_data)
+            st.plotly_chart(px.line(df_m_chart, x="التاريخ", y="الربح", title=f"تذبذب الأرباح خلال شهر {sel_month}"))
+
+        with chart_tab2:
+            # رسم بياني لشهور السنة المختارة
+            y_data = []
+            for m in range(1, 13):
+                m_days = calendar.monthrange(sel_year_y, m)[1]
+                m_sum = sum([get_daily_net(datetime(sel_year_y, m, d).date()) for d in range(1, m_days + 1)])
+                y_data.append({"الشهر": calendar.month_name[m], "الربح": m_sum})
+            df_y_chart = pd.DataFrame(y_data)
+            st.plotly_chart(px.bar(df_y_chart, x="الشهر", y="الربح", title=f"أداء الشهور خلال سنة {sel_year_y}"))
+
+        with chart_tab3:
+            # مقارنة السنوات
+            years_to_compare = [2024, 2025, 2026]
+            all_years_data = []
+            for y in years_to_compare:
+                y_sum = 0
+                for m in range(1, 13):
+                    m_days = calendar.monthrange(y, m)[1]
+                    y_sum += sum([get_daily_net(datetime(y, m, d).date()) for d in range(1, m_days + 1)])
+                all_years_data.append({"السنة": str(y), "إجمالي الربح": y_sum})
+            df_all_y = pd.DataFrame(all_years_data)
+            st.plotly_chart(px.bar(df_all_y, x="السنة", y="إجمالي الربح", title="مقارنة الأرباح السنوية"))
 
 elif st.session_state.user_type == "customer":
     st.title("👋 أهلاً بك")
