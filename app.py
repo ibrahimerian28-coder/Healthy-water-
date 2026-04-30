@@ -1,3 +1,4 @@
+import base64
 import streamlit as st
 import pandas as pd
 import requests
@@ -527,43 +528,78 @@ elif st.session_state.user_type == "admin":
     # --- 7. إدارة المنتجات ⚙️ ---
     elif menu == "إدارة المنتجات ⚙️":
         st.header("⚙️ إدارة منتجات المتجر")
-        with st.form("add_product_form"):
+        with st.form("add_product_form", clear_on_submit=True):
             st.subheader("إضافة منتج جديد")
             p_title = st.text_input("اسم المنتج")
             p_price = st.number_input("السعر الحالي", min_value=0)
-            p_old_price = st.number_input("السعر القديم (للخصم)", min_value=0)
+            p_old_price = st.number_input("السعر القديم", min_value=0)
             p_cat = st.selectbox("التصنيف", ["أجهزة", "شمعات"])
-            p_img = st.text_input("رابط الصورة (URL)")
-            p_desc = st.text_area("وصف المنتج")
+            
+            # رفع الصور من الجهاز (بحد أقصى 5 صور)
+            uploaded_files = st.file_uploader("ارفع صور المنتج (1-5 صور)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+            
+            # وصف المنتج (بدون حد أقصى للحروف)
+            p_desc = st.text_area("وصف المنتج التفصيلي", height=200)
+            
             if st.form_submit_button("حفظ المنتج"):
-                # توليد ID بسيط بناءً على الوقت
-                new_prod = [str(datetime.now().timestamp()), p_title, p_price, p_old_price, p_cat, p_img, p_desc]
-                if execute_gsheet_action("append", "Store_Products", new_prod):
-                    st.success("تم إضافة المنتج بنجاح"); st.rerun()
+                if not uploaded_files:
+                    st.error("يرجى رفع صورة واحدة على الأقل")
+                else:
+                    # تحويل الصور لروابط نصية Base64 لتخزينها في الشيت
+                    img_links = []
+                    for file in uploaded_files[:5]: # التأكد من عدم تجاوز 5 صور
+                        encoded = base64.b64encode(file.read()).decode()
+                        img_links.append(f"data:image/png;base64,{encoded}")
+                    
+                    # دمج روابط الصور في نص واحد مفصول بفاصلة
+                    all_imgs_str = "||".join(img_links)
+                    
+                    new_prod = [str(datetime.now().timestamp()), p_title, p_price, p_old_price, p_cat, all_imgs_str, p_desc]
+                    if execute_gsheet_action("append", "Store_Products", new_prod):
+                        st.success("تم إضافة المنتج بنجاح مع الصور!"); st.rerun()
 
-    # --- 8. المتجر 🛒 ---
+    # --- 8. المتجر 🛒 (نسخة عرض الصور المتعددة) ---
     elif menu == "المتجر 🛒":
         st.header("🛒 متجر Healthy Water")
+        # محاولة قراءة الشيت وتجاوز مشكلة الـ GID عبر البحث في كل البيانات المحملة
         if df_store.empty:
-            st.error("لا توجد بيانات في شيت المتجر. تأكد من تسمية الشيت Store_Products وتوافر الأعمدة.")
+            st.warning("جاري محاولة تحديث بيانات المتجر...")
+            df_store = load_data("1168172935") # تأكد من أن هذا الـ GID هو الخاص بصفحة Store_Products
+
+        if df_store.empty:
+            st.error("لا توجد بيانات. تأكد أن الـ GID في دالة load_data للمتجر صحيح.")
         else:
-            # تنظيف أسماء الأعمدة لتجنب KeyError
             df_store.columns = df_store.columns.str.strip()
             
-            # عرض الأجهزة
-            st.subheader("💧 أجهزة العمر الطويل")
-            devices = df_store[df_store['Category'].str.contains('أجهزة', na=False)]
-            if not devices.empty:
-                cols = st.columns(2)
-                for i, (_, row) in enumerate(devices.iterrows()):
-                    with cols[i % 2]:
-                        st.image(row['Images'], use_column_width=True)
-                        st.write(f"**{row['Title']}**")
-                        st.write(f"السعر: {row['Price']} ج.م")
-                        if st.button("تفاصيل المنتج", key=f"det_{row['row_index_internal']}"):
-                            st.session_state.selected_prod = row
+            # فلترة المنتجات
+            cats = ["أجهزة", "شمعات"]
+            for cat in cats:
+                st.subheader(f" {cat}")
+                items = df_store[df_store['Category'].str.contains(cat, na=False)]
+                if not items.empty:
+                    cols = st.columns(2)
+                    for i, (_, row) in enumerate(items.iterrows()):
+                        with cols[i % 2]:
+                            # عرض أول صورة فقط في المعرض
+                            imgs = str(row['Images']).split("||")
+                            st.image(imgs[0], use_column_width=True)
+                            st.write(f"**{row['Title']}**")
+                            st.write(f"السعر: {row['Price']} ج.م")
+                            if st.button("عرض التفاصيل والصور", key=f"view_{row['row_index_internal']}"):
+                                st.session_state.selected_prod = row
             
-            st.divider()
+            # نافذة التفاصيل وعرض كافة الصور
+            if st.session_state.get('selected_prod') is not None:
+                p = st.session_state.selected_prod
+                with st.expander(f"🔍 {p['Title']}", expanded=True):
+                    # عرض جاليري الصور
+                    all_p_imgs = str(p['Images']).split("||")
+                    st.image(all_p_imgs, width=150) # عرض كل الصور بجانب بعضها
+                    st.write(f"**الوصف:**")
+                    st.write(p['Description'])
+                    if st.button("إغلاق"):
+                        st.session_state.selected_prod = None
+                        st.rerun()
             
             # عرض الشمعات
             st.subheader("🛡️ شمع أصلي ..وبس!")
