@@ -378,7 +378,7 @@ else:
     # لو مش أدمن، بنخلي المنيو القيمة الافتراضية عشان الكود اللي تحت ما يضربش
     menu = st.session_state.menu
 
-        with st.form("add_customer_form"):
+    with st.form("add_customer_form"):
 
             existing_areas = sorted(df_c['area'].unique().tolist()) if not df_c.empty else []
             default_areas = ["مدينتي", "بدر", "الشروق", "المستقبل", "الرحاب", "مدينة نصر"]
