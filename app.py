@@ -64,7 +64,6 @@ if not df_exp.empty:
     df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 
 # --- 4. وظيفة توليد الـ PDF ---
-# --- كلاس مخصص لضمان ظهور الفوتر في كل صفحة تلقائياً ---
 class PDF_Report(FPDF):
     def footer(self):
         self.set_y(-15)
@@ -98,62 +97,42 @@ def generate_customer_pdf(cust_row, history_df):
         if not has_arabic: return "".join([c for c in str(text) if ord(c) < 128])
         return get_display(reshape(str(text)))
 
-    # --- 1. الهيدر: وضع اللوجو في اليسار كمنطقة محجوزة ---
     try:
-        # اللوجو في أقصى اليسار العلوي (حجم كبير جداً 90mm)
         pdf.image(LOGO_PATH, x=197, y=10, w=90) 
     except: pass
 
-    # --- 2. العناوين: في أقصى اليمين (بعيداً تماماً عن منطقة اللوجو) ---
-    # نحدد منطقة الكتابة في اليمين فقط (عرض 150mm من أصل 297mm)
     pdf.set_xy(10, 15) 
-    
     if has_arabic: pdf.set_font('ArabicFont', '', 24)
     else: pdf.set_font('Arial', 'B', 22)
-    
-    # حجز خلية بعرض 150 ملم فقط في جهة اليمين لضمان عدم وصول النص لليسار
     pdf.cell(150, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
     
     if has_arabic: pdf.set_font('ArabicFont', '', 14)
     else: pdf.set_font('Arial', '', 12)
-    
     pdf.set_x(10)
     pdf.cell(150, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
     
-    # مسافة أمان رأسية قبل بدء الجدول لضمان عدم التداخل مع اللوجو
     pdf.set_y(60) 
 
-    # --- 3. إعداد الجدول ---
-    # تغيير اسم "القطع" إلى "أخرى"
     cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
     widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # رأس الجدول (أزرق فاتح)
     pdf.set_fill_color(173, 216, 230) 
     if has_arabic: pdf.set_font('ArabicFont', '', 11)
-    
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    # --- 4. محتوى الجدول ---
     if has_arabic: pdf.set_font('ArabicFont', '', 10)
     fill = False
     for _, r in history_df.iterrows():
         pdf.set_fill_color(245, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
-        
         pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', fill)
         pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', fill)
-        
-        # خانة "أخرى" (التي تسحب من عمود other)
         other_val = str(r.get('other', ''))
         pdf.cell(widths[2], 8, format_ar(other_val), 1, 0, 'C', fill)
-        
-        # الشمعات
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
             val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C', fill)
-            
         pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', fill)
         fill = not fill 
 
@@ -224,36 +203,32 @@ elif st.session_state.user_type == "admin":
                     c1.write(f"🏠 **العنوان:** {r.get('adress', 'غير مسجل')}")
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
+                    
+                    # جلب وتنسيق سجل الصيانات لهذا العميل تحديداً
                     cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
+                    
                     if not cust_hist.empty:
                         last_v = cust_hist.iloc[0]['v_date_dt']
                         next_v = last_v + timedelta(days=to_num(r['cycle'])*30)
                         st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
+                        
+                        st.write("🛠️ **سجل الصيانات:**")
+                        display_hist = cust_hist.copy()
+                        check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
+                        for col in check_cols:
+                            if col in display_hist.columns:
+                                display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
+                        
+                        show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
+                        st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
+                        
+                        if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
+                            pdf_data = generate_customer_pdf(r, cust_hist)
+                            st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
+                    
                     phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(r.get(p, '')).strip() != ""]
                     for ph in phones:
                         st.markdown(f"<b>📞 {ph}</b> <a href='tel:{ph}'>اتصال</a> | <a href='https://wa.me/2{ph}'>واتساب</a>", unsafe_allow_html=True)
-                    # --- تعديل عرض الجدول داخل التطبيق ---
-st.write("🛠️ **سجل الصيانات:**")
-if not cust_hist.empty:
-    display_hist = cust_hist.copy()
-    
-    # قائمة بالأعمدة التي تحتوي على قيم صح/خطأ
-    check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
-    
-    # تحويل القيم لعلامات صح وغلط للعرض فقط
-    for col in check_cols:
-        if col in display_hist.columns:
-            display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
-    
-    show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
-    
-    # عرض الجدول بتنسيق أجمل
-    st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
-    
-    # زر الـ PDF يظل كما هو لأنه يتعامل مع البيانات الأصلية أو له منطقه الخاص
-    if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
-        pdf_data = generate_customer_pdf(r, cust_hist)
-        st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
 
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
