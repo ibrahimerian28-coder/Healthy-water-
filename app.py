@@ -65,11 +65,34 @@ def generate_customer_pdf(cust_row, history_df):
     try: pdf.image(LOGO_PATH, x=10, y=10, w=35)
     except: pass
     pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, f"Customer Maintenance Report: {cust_row['name']}", ln=True, align='C')
+    # تحويل النصوص لتجنب خطأ التشفير للغة العربية
+    safe_name = str(cust_row['name']).encode('latin-1', 'replace').decode('latin-1')
+    safe_address = str(cust_row.get('adress', '')).encode('latin-1', 'replace').decode('latin-1')
+    
+    pdf.cell(0, 10, f"Customer Maintenance Report: {safe_name}", ln=True, align='C')
     pdf.ln(10)
     pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Address: {cust_row['adress']} | Phone: {cust_row['phone']}", ln=True)
+    pdf.cell(0, 10, f"Address: {safe_address} | Phone: {cust_row['phone']}", ln=True)
     pdf.ln(5)
+    
+    cols = ['Date', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'Amount', 'Notes']
+    widths = [25, 12, 12, 12, 12, 12, 12, 12, 20, 140]
+    pdf.set_fill_color(200, 200, 200); pdf.set_font("Arial", 'B', 10)
+    for i, c in enumerate(cols): pdf.cell(widths[i], 10, c, 1, 0, 'C', True)
+    pdf.ln()
+    
+    pdf.set_font("Arial", '', 9)
+    for _, r in history_df.iterrows():
+        pdf.cell(widths[0], 10, str(r['visit_date']), 1)
+        for part in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
+            # وضع حرف x بدلا من صح، وتركها فارغة بدلا من خطأ لتجنب مشاكل PDF
+            val = "x" if str(r.get(part, '')).lower() in ['true', '1'] else ""
+            pdf.cell(12, 10, val, 1, 0, 'C')
+        
+        pdf.cell(widths[8], 10, str(r['amount']), 1, 0, 'C')
+        safe_notes = str(r['notes'])[:80].encode('latin-1', 'replace').decode('latin-1')
+        pdf.cell(widths[9], 10, safe_notes, 1, 1)
+    return pdf.output(dest='S').encode('latin-1', errors='ignore')
     
     cols = ['Date', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'Amount', 'Notes']
     widths = [25, 12, 12, 12, 12, 12, 12, 12, 20, 140]
@@ -107,48 +130,88 @@ if st.session_state.user_type is None:
 
 # --- 6. واجهة الأدمن ---
 elif st.session_state.user_type == "admin":
+    st.sidebar.image(LOGO_PATH, use_column_width=True) # إضافة اللوجو للقائمة الجانبية
     menu = st.sidebar.radio("القائمة", ["بيانات العملاء", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "المصروفات", "الأرباح 📈"])
 
-    # 6.1 إصلاح عرض العملاء (حل مشكلة KeyError)
     if menu == "بيانات العملاء":
         st.header("👥 إدارة العملاء")
-        search = st.text_input("بحث بالاسم أو الهاتف")
-        filtered = df_c[df_c.apply(lambda r: search in str(r.values), axis=1)] if search else df_c
+        search = st.text_input("🔍 بحث بالاسم، رقم الهاتف، أو المنطقة")
+        
+        # فلترة البحث الشاملة
+        if search:
+            filtered = df_c[df_c.apply(lambda r: search in str(r.get('name','')) or search in str(r.get('phone','')) or search in str(r.get('area','')), axis=1)]
+        else:
+            filtered = df_c
         
         for area, group in filtered.groupby('area'):
             st.subheader(f"📍 {area}")
             for _, r in group.iterrows():
                 with st.expander(f"👤 {r['name']}"):
                     c1, c2 = st.columns(2)
-                    c1.write(f"🏠 العنوان: {r['adress']}")
+                    addr = r.get('adress', '')
+                    c1.write(f"🏠 العنوان: {addr if addr else 'غير مسجل'}")
+                    c1.write(f"🗺️ اللوكيشن: {r.get('location', 'غير مسجل')}")
                     c1.write(f"🔄 الدورة: {r['cycle']} شهر")
-                    # معالجة الهواتف بأمان
+                    
+                    # أزرار الاتصال والواتساب الملونة
                     phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if p in r and str(r.get(p)).strip() != ""]
                     for ph in phones:
-                        c2.write(f"📞 {ph} [اتصال](tel:{ph}) | [واتساب](https://wa.me/{ph})")
+                        html_buttons = f"""
+                        <div style='display: flex; gap: 10px; margin-bottom: 5px;'>
+                            <span style='padding: 5px; font-weight: bold;'>📞 {ph}</span>
+                            <a href='tel:{ph}' style='background-color: #007bff; color: white; padding: 5px 10px; text-decoration: none; border-radius: 5px;'>اتصال 📞</a>
+                            <a href='https://wa.me/{ph}' target='_blank' style='background-color: #25D366; color: white; padding: 5px 10px; text-decoration: none; border-radius: 5px;'>واتساب 💬</a>
+                        </div>
+                        """
+                        c2.markdown(html_buttons, unsafe_allow_html=True)
                     
-                    hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
-                    st.dataframe(hist[['visit_date', 'amount', 'notes']], use_container_width=True)
-                    if st.button("📄 PDF", key=f"p_{r['row_index_internal']}"):
+                    st.divider()
+                    st.write("**🛠️ جدول الصيانات:**")
+                    hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False).copy()
+                    
+                    # تحويل True/False إلى صح وخطأ
+                    bool_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
+                    for bc in bool_cols:
+                        if bc in hist.columns:
+                            hist[bc] = hist[bc].apply(lambda x: "✅" if str(x).lower() == 'true' else "❌")
+                    
+                    # عرض كل الأعمدة
+                    display_cols = [c for c in hist.columns if c not in ['v_date_dt', 'amount_num', 'row_index_internal', 'month']]
+                    st.dataframe(hist[display_cols], use_container_width=True)
+                    
+                    col_btn1, col_btn2, col_btn3 = st.columns(3)
+                    if col_btn1.button("📄 تحميل PDF", key=f"pdf_{r['row_index_internal']}"):
                         st.download_button("تأكيد التحميل", generate_customer_pdf(r, hist), f"{r['name']}.pdf")
-
-    # 6.2 إضافة صفحة جدول المواعيد (مطلوبة)
+                    
+                    # أزرار الحذف والتعديل مع تحذير
+                    if col_btn2.button("✏️ تعديل بيانات العميل", key=f"edit_{r['row_index_internal']}"):
+                        st.warning("لتفعيل التعديل، يرجى ربط دالة Update مع Google Script.")
+                    
+                    if col_btn3.button("🗑️ حذف العميل", key=f"del_{r['row_index_internal']}", type="primary"):
+                        st.error("⚠️ تحذير: هل أنت متأكد من الحذف النهائي؟ (يجب ربط زر التأكيد بالسكريبت)")
+    # 6.2 جدول المواعيد 📅 (مواعيد الأسبوع القادم فقط)
     elif menu == "جدول المواعيد 📅":
-        st.header("📅 جدول المواعيد القادمة")
-        today = datetime.now()
+        st.header("📅 جدول مواعيد الأسبوع القادم")
+        today_date = datetime.now().date()
+        next_week_date = today_date + timedelta(days=7)
         upcoming_list = []
         
         for _, cust in df_c.iterrows():
             last_m = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt').iloc[-1:]
             if not last_m.empty:
                 last_v = last_m.iloc[0]['v_date_dt']
-                # إذا كان هناك موعد استثنائي نستخدمه، وإلا نحسب بناءً على الدورة
                 spec_date = parse_dt(last_m.iloc[0].get('spec_date', ""))
                 next_v = spec_date if pd.notna(spec_date) else last_v + timedelta(days=to_num(cust['cycle'])*30)
-                upcoming_list.append({'العميل': cust['name'], 'المنطقة': cust['area'], 'الهاتف': cust['phone'], 'آخر زيارة': last_v.date(), 'الموعد القادم': next_v.date()})
+                
+                # إضافة الشرط: يظهر فقط إذا كان الموعد القادم خلال 7 أيام من اليوم
+                if today_date <= next_v.date() <= next_week_date:
+                    upcoming_list.append({'العميل': cust['name'], 'المنطقة': cust['area'], 'الهاتف': cust['phone'], 'الموعد القادم': next_v.date()})
         
-        up_df = pd.DataFrame(upcoming_list).sort_values('الموعد القادم')
-        st.table(up_df)
+        if upcoming_list:
+            up_df = pd.DataFrame(upcoming_list).sort_values('الموعد القادم')
+            st.table(up_df)
+        else:
+            st.info("لا توجد مواعيد صيانة مجدولة خلال السبعة أيام القادمة.")
 
     # 6.3 تسجيل صيانة
     elif menu == "تسجيل صيانة":
@@ -168,26 +231,63 @@ elif st.session_state.user_type == "admin":
                 execute_gsheet_action("append", "Maintenance", [name, str(date), p1, p2, p3, mem, pc, calc, infra, other, amt, nts, str(spec)])
                 st.success("تم الحفظ!")
 
-    # 6.4 المخزن
+    # 6.4 المخزن 📦
     elif menu == "المخزن 📦":
-        st.header("📦 حالة المخزن")
-        for _, row in df_inv.iterrows():
-            col1, col2 = st.columns([3, 1])
-            col1.write(f"**{row['item_name']}** | الكمية: {row['quantity']}")
-            if to_num(row['quantity']) <= to_num(row['min_limit']): col2.error("🚨 ناقص")
-            st.divider()
+        st.header("📦 حالة المخزن وقيمة رأس المال")
+        total_capital = 0
+        
+        for index, row in df_inv.iterrows():
+            with st.expander(f"⚙️ {row['item_name']} - الكمية: {row['quantity']}"):
+                with st.form(f"inv_form_{index}"):
+                    c1, c2, c3, c4 = st.columns(4)
+                    new_name = c1.text_input("اسم العنصر", value=row['item_name'])
+                    new_qty = c2.number_input("الكمية المتاحة", value=to_num(row['quantity']))
+                    new_cost = c3.number_input("سعر التكلفة", value=to_num(row.get('cost_price', 0)))
+                    new_min = c4.number_input("الحد الأدنى (Min Limit)", value=to_num(row.get('min_limit', 0)))
+                    
+                    item_total_value = new_qty * new_cost
+                    total_capital += item_total_value
+                    
+                    st.write(f"**إجمالي قيمة هذا العنصر في المخزن:** {item_total_value} ج.م")
+                    
+                    if new_qty <= new_min:
+                        st.error("🚨 الرصيد وصل للحد الأدنى أو أقل!")
+                        
+                    if st.form_submit_button("تحديث العنصر 🔄"):
+                        # هنا نرسل أمر التحديث لجوجل شيت
+                        execute_gsheet_action("update", "Inventory", [new_name, new_qty, new_cost, new_min], row_index=row['row_index_internal'])
+                        st.success("تم إرسال طلب التحديث! (قم بتحديث الصفحة)")
+        
+        st.divider()
+        st.success(f"💰 **إجمالي قيمة رأس المال بالمخزن:** {total_capital} ج.م")
 
-    # 6.5 المصروفات
+    # 6.5 المصروفات 💵
     elif menu == "المصروفات":
-        st.header("💵 تسجيل المصروفات")
+        st.header("💵 إدارة المصروفات")
+        selected_date = st.date_input("اختر التاريخ للبحث أو التسجيل", datetime.now().date())
+        
+        # عرض المصروفات المسجلة في هذا التاريخ
+        day_expenses = df_exp[df_exp['exp_date_dt'].dt.date == selected_date]
+        if not day_expenses.empty:
+            st.info(f"المصروفات المسجلة مسبقاً ليوم {selected_date}:")
+            st.dataframe(day_expenses)
+        
         with st.form("exp"):
-            d = st.date_input("التاريخ")
-            tr = st.number_input("انتقالات", step=1)
-            sd = st.number_input("نثريات", step=1)
-            tot = st.number_input("الإجمالي الكلي لليوم (قطع غيار + مصروفات)", step=1)
-            if st.form_submit_button("حفظ"):
-                execute_gsheet_action("append", "Expenses", [str(d), tr, sd, "", "", tot])
-                st.success("تم الحفظ")
+            st.write("تسجيل مصروفات جديدة / تحديث:")
+            c1, c2 = st.columns(2)
+            spare_cost = c1.number_input("تكلفة قطع الغيار المستخدمة", step=1)
+            salaries = c2.number_input("رواتب / يوميات", step=1)
+            monthly_exp = c1.number_input("مصروفات شهرية (إيجار، فواتير)", step=1)
+            trans = c2.number_input("انتقالات / نثريات", step=1)
+            notes = st.text_area("ملاحظات")
+            
+            tot = spare_cost + salaries + monthly_exp + trans
+            st.write(f"**الإجمالي المحسوب:** {tot} ج.م")
+            
+            if st.form_submit_button("حفظ / تحديث المصروفات"):
+                # الأعمدة المتوقعة في جوجل شيت: date, spare_parts, salaries, monthly_exp, trans, total, notes
+                execute_gsheet_action("append", "Expenses", [str(selected_date), spare_cost, salaries, monthly_exp, trans, tot, notes])
+                st.success("تم حفظ المصروفات (وستنعكس تلقائياً في صفحة الأرباح)!")
 
     # 6.6 الأرباح (تطوير شامل)
     elif menu == "الأرباح 📈":
