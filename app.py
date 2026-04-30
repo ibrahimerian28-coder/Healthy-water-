@@ -473,9 +473,9 @@ if st.session_state.user_type == "admin":
                                     mime="application/pdf"
                                 )
                         with col_maint:
-                            if st.button("🔧 تسجيل صيانة", key=f"add_m_{r['row_index_internal']}"):
+                            if st.button("🔧 تسجيل صيانة", key=f"btn_maint_{r['row_index_internal']}"):
+                                st.session_state.menu = "تسجيل صيانة"  # تأكد أن الاسم يطابق المكتوب في القائمة الجانبية
                                 st.session_state.target_customer = r['name']
-                                st.query_params["menu"] = "تسجيل صيانة" 
                                 st.rerun()
                                 # --- جدول المواعيد ---
     elif menu == "جدول المواعيد 📅":
@@ -706,45 +706,34 @@ if st.session_state.user_type == "admin":
 
     # --- الأرباح ---
     elif menu == "الأرباح 📈":
-        st.header("📊 تقارير الأرباح والتحليل المالي")
+        st.header("📊 تحليل الأرباح والنمو")
         
+        # حساب التواريخ
         today = datetime.now().date()
+        start_week = today - timedelta(days=today.weekday())
+        start_month = today.replace(day=1)
         
-        def get_period_stats(start, end):
-            # 1. الإيرادات
-            mask_m = (df_m['v_date_dt'].dt.date >= start) & (df_m['v_date_dt'].dt.date <= end)
-            total_rev = df_m[mask_m]['amount_num'].sum()
-            
-            # 2. المصروفات اليدوية
-            mask_e = (df_exp['exp_date_dt'].dt.date >= start) & (df_exp['exp_date_dt'].dt.date <= end)
+        def calculate_net(start, end):
+            rev = df_m[(df_m['v_date_dt'].dt.date >= start) & (df_m['v_date_dt'].dt.date <= end)]['amount_num'].sum()
+            # المصاريف اليدوية + تكلفة البضاعة (COGS)
+            exp = sum([calculate_day_cogs(d.date()) for d in pd.date_range(start, end)])
             manual_exp = 0
-            cols = ['transportation', 'sundries', 'monthly_expensess', 'salaries']
             if not df_exp.empty:
-                for col in cols:
-                    if col in df_exp.columns:
-                        manual_exp += df_exp[mask_e][col].apply(to_num).sum()
-            
-            # 3. تكلفة البضاعة للفترة
-            total_cogs = sum([calculate_day_cogs(d.date()) for d in pd.date_range(start, end)])
-            
-            return total_rev, (manual_exp + total_cogs), (total_rev - manual_exp - total_cogs)
+                mask = (df_exp['exp_date_dt'].dt.date >= start) & (df_exp['exp_date_dt'].dt.date <= end)
+                manual_exp = df_exp[mask][['transportation', 'sundries', 'monthly_expensess', 'salaries']].sum().sum()
+            return rev - (exp + manual_exp)
 
-        # عرض الكروت
-        m1, m2, m3 = st.columns(3)
-        r_d, e_d, n_d = get_period_stats(today, today)
-        m1.metric("صافي ربح اليوم", f"{n_d} ج", f"إيراد: {r_d}")
+        # عرض المقاييس
+        c1, c2, c3 = st.columns(3)
+        c1.metric("صافي أرباح الأسبوع", f"{calculate_net(start_week, today)} ج")
+        c2.metric("صافي أرباح الشهر", f"{calculate_net(start_month, today)} ج")
+        c3.metric("صافي أرباح السنة", f"{calculate_net(today.replace(month=1, day=1), today)} ج")
 
-        r_m, e_m, n_m = get_period_stats(today.replace(day=1), today)
-        m2.metric("صافي ربح الشهر", f"{n_m} ج")
-
-        # الرسم البياني للإيرادات
-        st.subheader("📈 حركة الإيرادات آخر 10 أيام")
-        last_10 = [today - timedelta(days=i) for i in range(10)]
-        chart_df = pd.DataFrame({
-            "التاريخ": [d.strftime('%Y-%m-%d') for d in last_10],
-            "الإيراد": [df_m[df_m['v_date_dt'].dt.date == d]['amount_num'].sum() for d in last_10]
-        }).sort_values("التاريخ")
-        fig = px.line(chart_df, x="التاريخ", y="الإيراد", markers=True, title="نمو الإيرادات اليومي")
+        # الرسم البياني السنوي (أرباح كل شهر)
+        st.subheader("📈 الأداء المالي السنوي")
+        df_m['month'] = df_m['v_date_dt'].dt.to_period('M').astype(str)
+        monthly_rev = df_m.groupby('month')['amount_num'].sum().reset_index()
+        fig = px.bar(monthly_rev, x='month', y='amount_num', title="إجمالي الإيرادات شهرياً", labels={'amount_num': 'الإيراد', 'month': 'الشهر'})
         st.plotly_chart(fig, use_container_width=True)
 
     # --- إدارة المنتجات ---
@@ -775,7 +764,7 @@ if st.session_state.user_type == "admin":
                     st.success("تمت إضافة المنتج بنجاح")
                     st.rerun()
 
-            if st.form_submit_button("إضافة"):
+            if st.form_submit_button("إضافة منتج جديد", key="add_new_product_btn"):
 
                 data = [
                     name,
