@@ -193,6 +193,14 @@ elif st.session_state.user_type == "admin":
     admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️", "اطلب صيانة فوراً ⚙️"]
     if st.session_state.menu_choice not in admin_options:
         st.session_state.menu_choice = "بيانات العملاء"
+        # --- إضافة زر تسجيل الخروج في أسفل القائمة الجانبية ---
+st.sidebar.divider() # خط فاصل للتنسيق
+if st.sidebar.button("🔓 تسجيل الخروج", use_container_width=True):
+    # مسح بيانات تسجيل الدخول من ذاكرة التطبيق
+    st.session_state.user_type = None
+    st.session_state.authenticated = False
+    # إعادة تشغيل التطبيق للعودة لصفحة الدخول
+    st.rerun()
 
     menu = st.sidebar.radio(
         "القائمة", 
