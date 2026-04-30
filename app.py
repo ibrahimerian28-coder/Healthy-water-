@@ -187,18 +187,18 @@ elif st.session_state.user_type == "admin":
     st.sidebar.image(LOGO_PATH, use_column_width=True)
     if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
     
-# قائمة الخيارات للأدمن
-admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
+    # قائمة الخيارات للأدمن
+    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
 
-# التأكد من أن الاختيار الحالي موجود في القائمة لتجنب الأخطاء
-if st.session_state.menu_choice not in admin_options:
-    st.session_state.menu_choice = "بيانات العملاء"
+    # التأكد من أن الاختيار الحالي موجود في القائمة لتجنب الأخطاء
+    if st.session_state.menu_choice not in admin_options:
+        st.session_state.menu_choice = "بيانات العملاء"
 
-menu = st.sidebar.radio(
-    "القائمة", 
-    admin_options,
-    index=admin_options.index(st.session_state.menu_choice)
-) 
+    menu = st.sidebar.radio(
+        "القائمة", 
+        admin_options,
+        index=admin_options.index(st.session_state.menu_choice)
+    ) 
     
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
@@ -574,7 +574,8 @@ menu = st.sidebar.radio(
                 all_years_data.append({"السنة": str(y), "إجمالي الربح": y_sum})
             df_all_y = pd.DataFrame(all_years_data)
             st.plotly_chart(px.bar(df_all_y, x="السنة", y="إجمالي الربح", title="مقارنة الأرباح السنوية"))
-        elif menu == "المتجر 🛒":
+            
+    elif menu == "المتجر 🛒":
         st.header("🛒 متجر Healthy Water")
         
         # --- نظام سلة التسوق ---
@@ -644,80 +645,10 @@ menu = st.sidebar.radio(
             if st.button("تفريغ السلة"):
                 st.session_state.cart = []
                 st.rerun()
-        elif menu == "اطلب صيانة فوراً ⚙️":
+
+    elif menu == "اطلب صيانة فوراً ⚙️":
         st.header("⚙️ اطلب صيانة فوراً")
         
         with st.form("maintenance_request"):
             problem = st.selectbox("اختار نوع المشكلة اللي بتواجهك:", [
-                "طلب تغيير شمعات", "الفلتر بيسرب", "الموتور مبيفصلش", 
-                "الموتور مش شغال", "الميه ضعيفة جداً", "الفلتر مسدود", "أخرى"
-            ])
-            
-            shamaat = []
-            if problem == "طلب تغيير شمعات":
-                shamaat = st.multiselect("اختار الشمعات اللي محتاجة تغيير:", [
-                    "المرحلة الأولى", "المرحلة الثانية", "المرحلة الثالثة", 
-                    "الممبرين", "المرحلة الخامسة", "المرحلة السادسة", "المرحلة السابعة", "لمبة UV", "أخرى"
-                ])
-            
-            other_desc = ""
-            if problem == "أخرى":
-                other_desc = st.text_area("اشرح لنا المشكلة بالتفصيل:")
-            
-            address = st.text_input("العنوان بالتفصيل")
-            area = st.text_input("المنطقة")
-            
-            if st.form_submit_button("إرسال طلب الصيانة"):
-                # تجميع نص الرسالة
-                msg_body = f"طلب صيانة جديد:\n- المشكلة: {problem}\n"
-                if shamaat: msg_body += f"- الشمعات المطلوبة: {', '.join(shamaat)}\n"
-                if other_desc: msg_body += f"- وصف إضافي: {other_desc}\n"
-                msg_body += f"- المنطقة: {area}\n- العنوان: {address}"
-                
-                wa_maintenance_url = f"https://wa.me/201286609535?text={msg_body}"
-                st.success("تم تجهيز الطلب، اضغط على الزر بالأسفل للإرسال")
-                st.link_button("📱 تواصل مع الفني عبر واتساب", wa_maintenance_url)
-        elif menu == "إدارة المنتجات ⚙️":
-        st.header("⚙️ إضافة منتجات للمتجر")
-        
-        with st.form("add_product_form"):
-            cat = st.selectbox("قسم المنتج", ["أجهزة", "شمعات"])
-            title = st.text_input("عنوان الإعلان (مثلاً: فلتر 7 مراحل تايواني)")
-            price = st.number_input("السعر الحالي", min_value=0)
-            old_price = st.number_input("السعر قبل الخصم (اختياري)", min_value=0)
-            desc = st.text_area("وصف المنتج ومميزاته")
-            img_url = st.text_input("رابط صورة المنتج (Link)")
-            
-            if st.form_submit_button("رفع المنتج للمتجر"):
-                new_id = len(df_store) + 1
-                new_product = [new_id, cat, title, price, old_price, desc, img_url]
-                
-                if execute_gsheet_action("append", "Store_Products", new_product):
-                    st.success("✅ تم إضافة المنتج بنجاح لمتجرك!")
-                    st.rerun()
-                else:
-                    st.error("❌ فشل في الاتصال بشيت جوجل")
-
-# هذا الكود يظهر فقط لو العميل مسجل دخول
-if st.session_state.user_type == "customer":
-    st.sidebar.markdown(f"### ✨ أهلاً بك  ")
-    
-    # قائمة خيارات العميل
-    customer_options = ["بياناتي وصياناتي", "المتجر 🛒", "اطلب صيانة فوراً ⚙️"]
-    
-    # إدارة اختيار العميل
-    if 'cust_menu' not in st.session_state:
-        st.session_state.cust_menu = "بياناتي وصياناتي"
-        
-    menu = st.sidebar.radio(
-        "القائمة",
-        customer_options,
-        index=customer_options.index(st.session_state.cust_menu)
-    )
-    st.session_state.cust_menu = menu # حفظ الاختيار
-
-    st.sidebar.divider()
-    if st.sidebar.button("تسجيل الخروج"):
-        st.session_state.user_type = None
-        st.session_state.customer_data = None
-        st.rerun()
+                "طلب تغيير شمعات",
