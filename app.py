@@ -61,50 +61,72 @@ if not df_exp.empty:
     df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 
 # --- 4. وظيفة توليد الـ PDF (تصحيح AttributeError وتعديل التنسيق) ---
+from arabic_reshaper import reshape
+from bidi.algorithm import get_display
+
 def generate_customer_pdf(cust_row, history_df):
-    # إنشاء كائن الـ PDF - اتجاه أفقي 'L'
+    # 1. إنشاء كائن PDF يدعم اليونيكود
     pdf = FPDF(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # محاولة إضافة اللوجو
+    # 2. إضافة الخط العربي (تأكد من وجود ملف arial.ttf في مجلد المشروع)
+    try:
+        # سنحاول تحميل خط عربي، إذا فشل سنعود للخط الافتراضي
+        pdf.add_font('FreeSans', '', 'arial.ttf', unicode=True)
+        pdf.set_font('FreeSans', '', 14)
+        has_arabic_font = True
+    except:
+        pdf.set_font("Arial", 'B', 14)
+        has_arabic_font = False
+
+    # دالة مساعدة لتنسيق النصوص العربية
+    def format_ar(text):
+        if not has_arabic_font: return str(text)
+        reshaped_text = reshape(str(text)) # تصحيح شكل الحروف
+        bidi_text = get_display(reshaped_text) # عكس الاتجاه ليصبح من اليمين لليسار
+        return bidi_text
+
+    # 3. محاولة إضافة اللوجو
     try: pdf.image(LOGO_PATH, x=10, y=10, w=30)
     except: pass
     
-    pdf.set_font("Arial", 'B', 16)
-    # تنظيف الاسم من أي رموز غير مدعومة في Arial الأساسية
-    safe_name = str(cust_row['name']).encode('ascii', 'ignore').decode('ascii') 
-    if not safe_name: safe_name = "Customer Report"
-    
-    pdf.cell(0, 10, f"Maintenance Report: {safe_name}", ln=True, align='C')
+    # عنوان التقرير
+    pdf.cell(0, 10, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='C')
     pdf.ln(10)
     
-    # إعداد الجدول
-    pdf.set_font("Arial", 'B', 10)
-    cols = ['Date', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'Amt', 'Notes']
-    widths = [25, 12, 12, 12, 12, 12, 12, 12, 20, 140]
+    # 4. إعداد الجدول
+    # ملاحظة: سنرتب الأعمدة من اليمين لليسار لتناسب العربية
+    cols = ['ملاحظات', 'المبلغ', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
+    widths = [100, 20, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # الهيدر
     pdf.set_fill_color(200, 200, 200)
     for i, col in enumerate(cols):
-        pdf.cell(widths[i], 10, col, 1, 0, 'C', True)
+        pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
     
-    # البيانات
-    pdf.set_font("Arial", '', 9)
-    for _, r in history_df.iterrows():
-        pdf.cell(widths[0], 8, str(r['visit_date']), 1)
-        for part in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-            val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(12, 8, val, 1, 0, 'C')
-        
-        pdf.cell(widths[8], 8, str(r['amount']), 1, 0, 'C')
-        # تنظيف الملاحظات من الحروف العربية لأن Arial الافتراضية لا تدعمها (تجنباً للانهيار)
-        safe_note = str(r['notes']).encode('ascii', 'ignore').decode('ascii')[:70]
-        pdf.cell(widths[9], 8, safe_note, 1, 1, 'L')
+    # 5. إضافة البيانات
+    pdf.set_font('FreeSans', '', 10) if has_arabic_font else pdf.set_font("Arial", '', 10)
     
-    # --- الجزء الأهم للإصلاح ---
-    # تحويل الـ PDF إلى Bytes IO لضمان قبوله في Streamlit
-    return pdf.output(dest='S').encode('latin-1', errors='ignore')
+    for _, r in history_df.iterrows():
+        # ملاحظة: الترتيب هنا يجب أن يطابق ترتيب cols أعلاه (معكوس)
+        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R')
+        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C')
+        
+        for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
+            val = "V" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
+            pdf.cell(15, 8, val, 1, 0, 'C')
+            
+        pdf.cell(widths[9], 8, str(r['visit_date']), 1, 1, 'C')
+
+    # 6. الإصلاح النهائي لخطأ AttributeError
+    # في النسخ الجديدة، output() تعيد bytearray أو bytes مباشرة إذا لم نحدد ملف
+    pdf_output = pdf.output()
+    
+    # تحويل المخرج إلى Bytes صريحة لـ Streamlit
+    if isinstance(pdf_output, bytearray) or isinstance(pdf_output, bytes):
+        return bytes(pdf_output)
+    else:
+        return str(pdf_output).encode('latin-1', errors='ignore')
 
 # --- 5. نظام الدخول ---
 if 'user_type' not in st.session_state: st.session_state.user_type = None
