@@ -232,17 +232,28 @@ elif st.session_state.user_type == "admin":
                     phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(r.get(p, '')).strip() != ""]
                     for ph in phones:
                         st.markdown(f"<b>📞 {ph}</b> <a href='tel:{ph}'>اتصال</a> | <a href='https://wa.me/2{ph}'>واتساب</a>", unsafe_allow_html=True)
-                    st.write("🛠️ **سجل الصيانات:**")
-                    if not cust_hist.empty:
-                        display_hist = cust_hist.copy()
-                        show_cols = ['visit_date', 'P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared', 'amount', 'notes']
-                        st.dataframe(display_hist[show_cols], use_container_width=True)
-                        if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
-                            pdf_data = generate_customer_pdf(r, cust_hist)
-                            st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
-                    else: st.info("لا يوجد سجل صيانات.")
-                    if st.button("➕ تسجيل صيانة لهذا العميل", key=f"add_m_{r['row_index_internal']}"):
-                        st.session_state.target_customer = r['name']; st.session_state.menu_choice = "تسجيل صيانة"; st.rerun()
+                    # --- تعديل عرض الجدول داخل التطبيق ---
+st.write("🛠️ **سجل الصيانات:**")
+if not cust_hist.empty:
+    display_hist = cust_hist.copy()
+    
+    # قائمة بالأعمدة التي تحتوي على قيم صح/خطأ
+    check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
+    
+    # تحويل القيم لعلامات صح وغلط للعرض فقط
+    for col in check_cols:
+        if col in display_hist.columns:
+            display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
+    
+    show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
+    
+    # عرض الجدول بتنسيق أجمل
+    st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
+    
+    # زر الـ PDF يظل كما هو لأنه يتعامل مع البيانات الأصلية أو له منطقه الخاص
+    if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
+        pdf_data = generate_customer_pdf(r, cust_hist)
+        st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
 
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
