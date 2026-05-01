@@ -64,7 +64,11 @@ if not df_store.empty:
     df_store['Price'] = df_store['Price'].apply(to_num)
     df_store['Old_Price'] = df_store['Old_Price'].apply(to_num)
 
-st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="🚰")
+st.set_page_config(
+    page_title="Healthy Water", # الاسم اللي هيظهر في التاب وفي الـ Shortcut
+    page_icon="logo.png"
+)
+
 
 if 'user_type' not in st.session_state: st.session_state.user_type = None
 
@@ -602,3 +606,14 @@ elif st.session_state.user_type == "admin":
             ])
             # باقي الكود هنا...
             st.form_submit_button("إرسال الطلب")
+
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
+
