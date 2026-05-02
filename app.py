@@ -103,10 +103,7 @@ if not df_store.empty:
     df_store['Price'] = df_store['Price'].apply(to_num)
     df_store['Old_Price'] = df_store['Old_Price'].apply(to_num)
 
-st.set_page_config(
-    page_title="Healthy Water", # الاسم اللي هيظهر في التاب وفي الـ Shortcut
-    page_icon="logo.png"
-)
+
 
 
 if 'user_type' not in st.session_state: st.session_state.user_type = None
