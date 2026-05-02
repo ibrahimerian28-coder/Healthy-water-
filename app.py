@@ -1,4 +1,5 @@
 import streamlit as st
+st.set_page_config(initial_sidebar_state="expanded")
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
