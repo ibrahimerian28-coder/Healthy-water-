@@ -9,56 +9,51 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. إعدادات الصفحة (يجب أن تكون في البداية تماماً ومرة واحدة) ---
+# 1. إعدادات الصفحة (لازم أول سطر)
 st.set_page_config(
     page_title="Healthy Water",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. الروابط المركزية ---
+# 2. الروابط المركزية
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
 
-# --- 3. إدارة الجلسة (Session State) ---
+# 3. إدارة الجلسة
 if 'user_type' not in st.session_state:
     st.session_state.user_type = None
 if 'menu_choice' not in st.session_state:
     st.session_state.menu_choice = "بيانات العملاء"
 
-# --- 4. القائمة الجانبية (Sidebar) ---
-def draw_sidebar():
-    if st.session_state.user_type == "admin":
-        try:
-            st.sidebar.image(LOGO_PATH, use_column_width=True)
-        except:
-            st.sidebar.subheader("Healthy Water")
+# 4. رسم القائمة الجانبية (Sidebar) مباشرة بدون تعريف دالة (عشان نضمن متعملش Error)
+if st.session_state.user_type == "admin":
+    try:
+        st.sidebar.image(LOGO_PATH, use_column_width=True)
+    except:
+        st.sidebar.subheader("Healthy Water")
 
-        admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
-        
-        # التأكد أن الاختيار الحالي موجود في القائمة
-        current_index = 0
-        if st.session_state.menu_choice in admin_options:
-            current_index = admin_options.index(st.session_state.menu_choice)
+    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
+    
+    current_idx = 0
+    if st.session_state.menu_choice in admin_options:
+        current_idx = admin_options.index(st.session_state.menu_choice)
 
-        st.session_state.menu_choice = st.sidebar.radio(
-            "القائمة الرئيسيّة",
-            admin_options,
-            index=current_index,
-            key="admin_sidebar_v3"
-        )
-    else:
-        st.sidebar.image(LOGO_PATH, use_column_width=True) if os.path.exists(LOGO_PATH) else None
-        st.sidebar.info("👋 مرحباً بك في هيلثي ووتر. يرجى تسجيل الدخول.")
+    st.session_state.menu_choice = st.sidebar.radio(
+        "القائمة الرئيسية",
+        admin_options,
+        index=current_idx,
+        key="admin_sidebar_final_v5"
+    )
+else:
+    if os.path.exists(LOGO_PATH):
+        st.sidebar.image(LOGO_PATH, use_column_width=True)
+    st.sidebar.info("👋 مرحباً بك في هيلثي ووتر. يرجى تسجيل الدخول.")
 
-# استدعاء رسم القائمة
-draw_sidebar()
-
-
-# --- 2. الدوال المساعدة ---
-def to_num(val):
+# --- هنا يبدأ بقية كودك القديم (الدوال المساعدة) ---
+    
     try:
         if pd.isna(val) or str(val).strip() == "": return 0
         return int(float(str(val).replace(',', '').strip()))
