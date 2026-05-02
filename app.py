@@ -241,7 +241,7 @@ elif st.session_state.user_type == "admin":
 
     # ... وهكذا لبقية القائمة (المخزن، المصروفات، إلخ) ...
 
-elif st.session_state.user_type == "customer":
+elif st.session_state.user_type == "admin":
     st.header(f"👋 مرحباً {st.session_state.customer_data['name'].values[0]}")
     # كود عرض بيانات العميل الخاص به فقط
 
