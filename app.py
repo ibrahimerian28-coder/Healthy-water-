@@ -54,10 +54,15 @@ else:
 
 # --- هنا يبدأ بقية كودك القديم (الدوال المساعدة) ---
     
+    # تأكد إن السطر ده موجود فوق السطر اللي فيه المشكلة
+def to_num(val):
+    if pd.isna(val) or str(val).strip() == "": 
+        return 0
     try:
-        if pd.isna(val) or str(val).strip() == "": return 0
         return int(float(str(val).replace(',', '').strip()))
-    except: return 0
+    except: 
+        return 0
+
 
 def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
     payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
