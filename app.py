@@ -8,36 +8,45 @@ import io
 import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
+# تأكد إن السطر ده في أول الملف خالص
 import streamlit as st
 
+# 1. إعدادات الصفحة
+if 'setup_done' not in st.session_state:
+    st.set_page_config(page_title="Healthy Water", initial_sidebar_state="expanded")
+    st.session_state.setup_done = True
+
+# 2. التأكد من وجود user_type في الذاكرة لتجنب الـ AttributeError
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None  # قيمة افتراضية عشان الكود ميوقفش
+
+# 3. عرض القائمة الجانبية فقط لو المستخدم Admin
 if st.session_state.user_type == "admin":
-    # 1. إظهار اللوجو
     try:
         st.sidebar.image(LOGO_PATH, use_column_width=True)
     except:
         st.sidebar.subheader("Healthy Water")
 
-    # 2. تعريف الخيارات
     admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
     
-    # 3. التأكد من الاختيار الحالي
     if 'menu_choice' not in st.session_state: 
         st.session_state.menu_choice = "بيانات العملاء"
     
-    # تأكد إن الاختيار موجود فعلاً في القائمة عشان الـ index ميعملش error
     current_index = 0
     if st.session_state.menu_choice in admin_options:
         current_index = admin_options.index(st.session_state.menu_choice)
 
-    # 4. عرض القائمة (تأكد إن الأقواس مقفولة صح)
     menu = st.sidebar.radio(
         label="القائمة", 
         options=admin_options,
-        index=current_index
+        index=current_index,
+        key="admin_menu_final" # مفتاح فريد عشان ميحصلش تكرار
     )
-    
-    # 5. تحديث الاختيار في الـ session
     st.session_state.menu_choice = menu
+else:
+    # لو المستخدم مش أدمن (لسه مسجلش دخول)
+    st.sidebar.info("يرجى تسجيل الدخول للوصول للقائمة")
+
 
 # --- 1. الإعدادات والروابط المركزية ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
