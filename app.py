@@ -228,11 +228,7 @@ elif st.session_state.user_type == "admin":
     if st.session_state.menu_choice not in admin_options:
         st.session_state.menu_choice = "بيانات العملاء"
 
-    menu = st.sidebar.radio(
-        "القائمة", 
-        admin_options,
-        index=admin_options.index(st.session_state.menu_choice)
-    ) 
+    
     
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
