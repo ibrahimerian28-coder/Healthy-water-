@@ -195,52 +195,35 @@ def generate_customer_pdf(cust_row, history_df):
 
 # --- 5. منطق واجهة المستخدم (تسجيل الدخول والصفحات) ---
 
+# --- تسجيل الدخول (محسن) ---
 if st.session_state.user_type is None:
-    # عرض واجهة تسجيل الدخول فقط إذا لم يتم تسجيل الدخول
     st.title("🚰 Healthy Water System")
-    t1, t2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
-    with t1:
+
+    tab1, tab2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
+
+    with tab1:
         pwd = st.text_input("كلمة السر", type="password")
         if st.button("دخول الأدمن"):
             if pwd == ADMIN_PASSWORD:
                 st.session_state.user_type = "admin"
                 st.rerun()
-    with t2:
+            else:
+                st.error("كلمة السر غير صحيحة")
+
+    with tab2:
         phone_input = st.text_input("رقم الهاتف المسجل")
         if st.button("دخول العميل"):
-            # ... كود تسجيل دخول العميل كما هو ...
             clean_phone = str(phone_input).strip()
             match = df_c[df_c.astype(str).apply(lambda x: x.str.contains(clean_phone)).any(axis=1)]
+
             if not match.empty:
                 st.session_state.user_type = "customer"
                 st.session_state.customer_data = match
                 st.rerun()
+            else:
+                st.error("الرقم غير موجود")
 
-elif st.session_state.user_type == "admin":
-    # كل الصفحات دي لازم تكون "جوه" بلوك الـ admin (واخدة مسافة Tab)
-    
-    if menu == "إضافة عميل جديد":
-        st.header("➕ إضافة عميل جديد")
-        # ... كود الفورم ...
-        with st.form("add_customer_form"):
-            # (انسخ بقية كود إضافة عميل هنا مع الحفاظ على المسافة)
-            st.write("اكتب كود الفورم هنا") 
-            if st.form_submit_button("حفظ"): pass
-
-    elif menu == "بيانات العملاء":
-        st.header("👥 إدارة العملاء")
-        # (انسخ بقية كود بيانات العملاء هنا مع الحفاظ على المسافة)
-
-    elif menu == "جدول المواعيد 📅":
-        # (انسخ كود المواعيد هنا مع الحفاظ على المسافة)
-        pass
-
-    # ... وهكذا لبقية القائمة (المخزن، المصروفات، إلخ) ...
-
-elif st.session_state.user_type == "customer":
-    st.header(f"👋 مرحباً {st.session_state.customer_data['name'].values[0]}")
-    # كود عرض بيانات العميل الخاص به فقط
-
+    st.stop()
 
     
     
