@@ -223,7 +223,7 @@ if st.session_state.user_type is None:
             else:
                 st.error("الرقم غير موجود")
 
-    st.stop()
+    
 
 
     if menu == "إضافة عميل جديد":
