@@ -225,8 +225,7 @@ if st.session_state.user_type is None:
 
     st.stop()
 
-    
-    
+
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
         with st.form("add_customer_form"):
