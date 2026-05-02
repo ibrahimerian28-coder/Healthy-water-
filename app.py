@@ -11,10 +11,13 @@ from bidi.algorithm import get_display
 # تأكد إن السطر ده في أول الملف خالص
 import streamlit as st
 
-# 1. إعدادات الصفحة
-if 'setup_done' not in st.session_state:
-    st.set_page_config(page_title="Healthy Water", initial_sidebar_state="expanded")
-    st.session_state.setup_done = True
+# تأكد إن ده أول سطر برمجيا
+st.set_page_config(
+    page_title="Healthy Water",
+    layout="wide",
+    initial_sidebar_state="expanded" # تأكد إنها مكتوبة expanded مش collapsed
+)
+
 
 # 2. التأكد من وجود user_type في الذاكرة لتجنب الـ AttributeError
 if 'user_type' not in st.session_state:
