@@ -112,10 +112,6 @@ if not df_store.empty:
     df_store['Old_Price'] = df_store['Old_Price'].apply(to_num)
 
 
-
-
-if 'user_type' not in st.session_state: st.session_state.user_type = None
-
 if not df_m.empty:
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
     df_m['amount_num'] = df_m['amount'].apply(to_num)
