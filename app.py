@@ -8,54 +8,54 @@ import io
 import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
-# تأكد إن السطر ده في أول الملف خالص
-import streamlit as st
 
-# تأكد إن ده أول سطر برمجيا
+# --- 1. إعدادات الصفحة (يجب أن تكون في البداية تماماً ومرة واحدة) ---
 st.set_page_config(
     page_title="Healthy Water",
     layout="wide",
-    initial_sidebar_state="expanded" # تأكد إنها مكتوبة expanded مش collapsed
+    initial_sidebar_state="expanded"
 )
 
-
-# 2. التأكد من وجود user_type في الذاكرة لتجنب الـ AttributeError
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None  # قيمة افتراضية عشان الكود ميوقفش
-
-# 3. عرض القائمة الجانبية فقط لو المستخدم Admin
-if st.session_state.user_type == "admin":
-    try:
-        st.sidebar.image(LOGO_PATH, use_column_width=True)
-    except:
-        st.sidebar.subheader("Healthy Water")
-
-    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
-    
-    if 'menu_choice' not in st.session_state: 
-        st.session_state.menu_choice = "بيانات العملاء"
-    
-    current_index = 0
-    if st.session_state.menu_choice in admin_options:
-        current_index = admin_options.index(st.session_state.menu_choice)
-
-    menu = st.sidebar.radio(
-        label="القائمة", 
-        options=admin_options,
-        index=current_index,
-        key="admin_menu_final" # مفتاح فريد عشان ميحصلش تكرار
-    )
-    st.session_state.menu_choice = menu
-else:
-    # لو المستخدم مش أدمن (لسه مسجلش دخول)
-    st.sidebar.info("يرجى تسجيل الدخول للوصول للقائمة")
-
-
-# --- 1. الإعدادات والروابط المركزية ---
+# --- 2. الروابط المركزية ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
+
+# --- 3. إدارة الجلسة (Session State) ---
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+if 'menu_choice' not in st.session_state:
+    st.session_state.menu_choice = "بيانات العملاء"
+
+# --- 4. القائمة الجانبية (Sidebar) ---
+def draw_sidebar():
+    if st.session_state.user_type == "admin":
+        try:
+            st.sidebar.image(LOGO_PATH, use_column_width=True)
+        except:
+            st.sidebar.subheader("Healthy Water")
+
+        admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
+        
+        # التأكد أن الاختيار الحالي موجود في القائمة
+        current_index = 0
+        if st.session_state.menu_choice in admin_options:
+            current_index = admin_options.index(st.session_state.menu_choice)
+
+        st.session_state.menu_choice = st.sidebar.radio(
+            "القائمة الرئيسيّة",
+            admin_options,
+            index=current_index,
+            key="admin_sidebar_v3"
+        )
+    else:
+        st.sidebar.image(LOGO_PATH, use_column_width=True) if os.path.exists(LOGO_PATH) else None
+        st.sidebar.info("👋 مرحباً بك في هيلثي ووتر. يرجى تسجيل الدخول.")
+
+# استدعاء رسم القائمة
+draw_sidebar()
+
 
 # --- 2. الدوال المساعدة ---
 def to_num(val):
