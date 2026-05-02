@@ -8,6 +8,17 @@ import io
 import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
+import streamlit as st
+
+# السطر ده هو اللي هيحل مشكلة اختفاء القائمة الجانبية
+st.set_page_config(
+    page_title="Healthy Water",
+    page_icon="logo.png",
+    layout="wide",
+    initial_sidebar_state="expanded"  # دي أهم حتة لإظهار القائمة إجبارياً
+)
+
+# باقي كود التطبيق بتاعك بيكمل هنا...
 
 # --- 1. الإعدادات والروابط المركزية ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
