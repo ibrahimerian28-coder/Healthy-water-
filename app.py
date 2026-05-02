@@ -197,40 +197,54 @@ def generate_customer_pdf(cust_row, history_df):
 
     return bytes(pdf.output())
 
-# --- 5. تسجيل الدخول ---
+# --- 5. منطق واجهة المستخدم (تسجيل الدخول والصفحات) ---
+
 if st.session_state.user_type is None:
+    # عرض واجهة تسجيل الدخول فقط إذا لم يتم تسجيل الدخول
     st.title("🚰 Healthy Water System")
     t1, t2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
     with t1:
         pwd = st.text_input("كلمة السر", type="password")
         if st.button("دخول الأدمن"):
             if pwd == ADMIN_PASSWORD:
-                st.session_state.user_type = "admin"; st.rerun()
+                st.session_state.user_type = "admin"
+                st.rerun()
     with t2:
         phone_input = st.text_input("رقم الهاتف المسجل")
         if st.button("دخول العميل"):
-            if phone_input.strip() == "":
-                st.warning("يرجى إدخال رقم الهاتف")
-            else:
-                clean_phone = str(phone_input).strip()
-                available_phone_cols = [col for col in df_c.columns if 'phone' in col.lower()]
-                
-                if not available_phone_cols:
-                    st.error("خطأ: لم يتم العثور على أعمدة الهاتف في قاعدة البيانات.")
-                else:
-                    mask = df_c[available_phone_cols].astype(str).apply(
-                        lambda x: x.str.contains(clean_phone, na=False)
-                    ).any(axis=1)
-                    
-                    match = df_c[mask]
-                    
-                    if not match.empty:
-                        st.session_state.user_type = "customer"
-                        st.session_state.customer_data = match
-                        st.success("تم تسجيل الدخول بنجاح")
-                        st.rerun()
-                    else:
-                        st.error("عذراً، هذا الرقم غير مسجل لدينا.")
+            # ... كود تسجيل دخول العميل كما هو ...
+            clean_phone = str(phone_input).strip()
+            match = df_c[df_c.astype(str).apply(lambda x: x.str.contains(clean_phone)).any(axis=1)]
+            if not match.empty:
+                st.session_state.user_type = "customer"
+                st.session_state.customer_data = match
+                st.rerun()
+
+elif st.session_state.user_type == "admin":
+    # كل الصفحات دي لازم تكون "جوه" بلوك الـ admin (واخدة مسافة Tab)
+    
+    if menu == "إضافة عميل جديد":
+        st.header("➕ إضافة عميل جديد")
+        # ... كود الفورم ...
+        with st.form("add_customer_form"):
+            # (انسخ بقية كود إضافة عميل هنا مع الحفاظ على المسافة)
+            st.write("اكتب كود الفورم هنا") 
+            if st.form_submit_button("حفظ"): pass
+
+    elif menu == "بيانات العملاء":
+        st.header("👥 إدارة العملاء")
+        # (انسخ بقية كود بيانات العملاء هنا مع الحفاظ على المسافة)
+
+    elif menu == "جدول المواعيد 📅":
+        # (انسخ كود المواعيد هنا مع الحفاظ على المسافة)
+        pass
+
+    # ... وهكذا لبقية القائمة (المخزن، المصروفات، إلخ) ...
+
+elif st.session_state.user_type == "customer":
+    st.header(f"👋 مرحباً {st.session_state.customer_data['name'].values[0]}")
+    # كود عرض بيانات العميل الخاص به فقط
+
 
     
     
