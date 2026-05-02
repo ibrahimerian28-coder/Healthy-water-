@@ -27,6 +27,7 @@ if 'user_type' not in st.session_state:
     st.session_state.user_type = None
 if 'menu_choice' not in st.session_state:
     st.session_state.menu_choice = "بيانات العملاء"
+menu = st.session_state.menu_choice
 
 # 4. رسم القائمة الجانبية (Sidebar) مباشرة بدون تعريف دالة (عشان نضمن متعملش Error)
 if st.session_state.user_type == "admin":
