@@ -1,5 +1,4 @@
 import streamlit as st
-st.set_page_config(initial_sidebar_state="expanded")
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
@@ -10,27 +9,29 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# 1. إعدادات الصفحة (لازم أول سطر)
+# --- 1. إعدادات الصفحة (مرة واحدة فقط في أول السطر) ---
 st.set_page_config(
     page_title="Healthy Water",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. الروابط المركزية
+# --- 2. الروابط المركزية ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
 
-# 3. إدارة الجلسة
+# --- 3. إدارة الجلسة (Session State) ---
 if 'user_type' not in st.session_state:
     st.session_state.user_type = None
 if 'menu_choice' not in st.session_state:
     st.session_state.menu_choice = "بيانات العملاء"
-menu = st.session_state.menu_choice
 
-# 4. رسم القائمة الجانبية (Sidebar) مباشرة بدون تعريف دالة (عشان نضمن متعملش Error)
+# --- 4. رسم القائمة الجانبية (Sidebar) ---
+# بنعرف المتغير menu هنا عشان نستخدمه في باقي الكود
+menu = st.session_state.menu_choice 
+
 if st.session_state.user_type == "admin":
     try:
         st.sidebar.image(LOGO_PATH, use_column_width=True)
@@ -43,20 +44,22 @@ if st.session_state.user_type == "admin":
     if st.session_state.menu_choice in admin_options:
         current_idx = admin_options.index(st.session_state.menu_choice)
 
-    st.session_state.menu_choice = st.sidebar.radio(
+    menu = st.sidebar.radio(
         "القائمة الرئيسية",
         admin_options,
         index=current_idx,
-        key="admin_sidebar_final_v5"
+        key="main_admin_sidebar"
     )
+    st.session_state.menu_choice = menu # تحديث الاختيار في الذاكرة
 else:
-    if os.path.exists(LOGO_PATH):
-        st.sidebar.image(LOGO_PATH, use_column_width=True)
+    try:
+        if os.path.exists(LOGO_PATH):
+            st.sidebar.image(LOGO_PATH, use_column_width=True)
+    except: pass
     st.sidebar.info("👋 مرحباً بك في هيلثي ووتر. يرجى تسجيل الدخول.")
 
-# --- هنا يبدأ بقية كودك القديم (الدوال المساعدة) ---
-    
-    # تأكد إن السطر ده موجود فوق السطر اللي فيه المشكلة
+# --- 5. الدوال المساعدة (هنا يبدأ كودك القديم) ---
+
 def to_num(val):
     if pd.isna(val) or str(val).strip() == "": 
         return 0
@@ -228,16 +231,6 @@ if st.session_state.user_type is None:
                         st.rerun()
                     else:
                         st.error("عذراً، هذا الرقم غير مسجل لدينا.")
-
-# --- 6. واجهة الأدمن ---
-elif st.session_state.user_type == "admin":
-    st.sidebar.image(LOGO_PATH, use_column_width=True)
-    if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
-    
-    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
-
-    if st.session_state.menu_choice not in admin_options:
-        st.session_state.menu_choice = "بيانات العملاء"
 
     
     
