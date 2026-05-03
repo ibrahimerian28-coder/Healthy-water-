@@ -9,65 +9,18 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. إعدادات الصفحة (مرة واحدة فقط في أول السطر) ---
-st.set_page_config(
-    page_title="Healthy Water",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# --- 2. الروابط المركزية ---
+# --- 1. الإعدادات والروابط المركزية ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
 
-# --- 3. إدارة الجلسة (Session State) ---
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-if 'menu_choice' not in st.session_state:
-    st.session_state.menu_choice = "بيانات العملاء"
-
-# --- 4. رسم القائمة الجانبية (Sidebar) ---
-# بنعرف المتغير menu هنا عشان نستخدمه في باقي الكود
-menu = st.session_state.menu_choice 
-
-if st.session_state.user_type == "admin":
-    try:
-        st.sidebar.image(LOGO_PATH, use_column_width=True)
-    except:
-        st.sidebar.subheader("Healthy Water")
-
-    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
-    
-    current_idx = 0
-    if st.session_state.menu_choice in admin_options:
-        current_idx = admin_options.index(st.session_state.menu_choice)
-
-    menu = st.sidebar.radio(
-        "القائمة الرئيسية",
-        admin_options,
-        index=current_idx,
-        key="main_admin_sidebar"
-    )
-    st.session_state.menu_choice = menu # تحديث الاختيار في الذاكرة
-else:
-    try:
-        if os.path.exists(LOGO_PATH):
-            st.sidebar.image(LOGO_PATH, use_column_width=True)
-    except: pass
-    st.sidebar.info("👋 مرحباً بك في هيلثي ووتر. يرجى تسجيل الدخول.")
-
-# --- 5. الدوال المساعدة (هنا يبدأ كودك القديم) ---
-
+# --- 2. الدوال المساعدة ---
 def to_num(val):
-    if pd.isna(val) or str(val).strip() == "": 
-        return 0
     try:
+        if pd.isna(val) or str(val).strip() == "": return 0
         return int(float(str(val).replace(',', '').strip()))
-    except: 
-        return 0
-
+    except: return 0
 
 def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
     payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
@@ -111,6 +64,9 @@ if not df_store.empty:
     df_store['Price'] = df_store['Price'].apply(to_num)
     df_store['Old_Price'] = df_store['Old_Price'].apply(to_num)
 
+st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="🚰")
+
+if 'user_type' not in st.session_state: st.session_state.user_type = None
 
 if not df_m.empty:
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
@@ -193,39 +149,57 @@ def generate_customer_pdf(cust_row, history_df):
 
     return bytes(pdf.output())
 
-# --- 5. منطق واجهة المستخدم (تسجيل الدخول والصفحات) ---
-
-# --- تسجيل الدخول (محسن) ---
+# --- 5. تسجيل الدخول ---
 if st.session_state.user_type is None:
     st.title("🚰 Healthy Water System")
-
-    tab1, tab2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
-
-    with tab1:
+    t1, t2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
+    with t1:
         pwd = st.text_input("كلمة السر", type="password")
         if st.button("دخول الأدمن"):
             if pwd == ADMIN_PASSWORD:
-                st.session_state.user_type = "admin"
-                st.rerun()
-            else:
-                st.error("كلمة السر غير صحيحة")
-
-    with tab2:
+                st.session_state.user_type = "admin"; st.rerun()
+    with t2:
         phone_input = st.text_input("رقم الهاتف المسجل")
         if st.button("دخول العميل"):
-            clean_phone = str(phone_input).strip()
-            match = df_c[df_c.astype(str).apply(lambda x: x.str.contains(clean_phone)).any(axis=1)]
-
-            if not match.empty:
-                st.session_state.user_type = "customer"
-                st.session_state.customer_data = match
-                st.rerun()
+            if phone_input.strip() == "":
+                st.warning("يرجى إدخال رقم الهاتف")
             else:
-                st.error("الرقم غير موجود")
+                clean_phone = str(phone_input).strip()
+                available_phone_cols = [col for col in df_c.columns if 'phone' in col.lower()]
+                
+                if not available_phone_cols:
+                    st.error("خطأ: لم يتم العثور على أعمدة الهاتف في قاعدة البيانات.")
+                else:
+                    mask = df_c[available_phone_cols].astype(str).apply(
+                        lambda x: x.str.contains(clean_phone, na=False)
+                    ).any(axis=1)
+                    
+                    match = df_c[mask]
+                    
+                    if not match.empty:
+                        st.session_state.user_type = "customer"
+                        st.session_state.customer_data = match
+                        st.success("تم تسجيل الدخول بنجاح")
+                        st.rerun()
+                    else:
+                        st.error("عذراً، هذا الرقم غير مسجل لدينا.")
 
+# --- 6. واجهة الأدمن ---
+elif st.session_state.user_type == "admin":
+    st.sidebar.image(LOGO_PATH, use_column_width=True)
+    if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
     
+    admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️"]
 
+    if st.session_state.menu_choice not in admin_options:
+        st.session_state.menu_choice = "بيانات العملاء"
 
+    menu = st.sidebar.radio(
+        "القائمة", 
+        admin_options,
+        index=admin_options.index(st.session_state.menu_choice)
+    ) 
+    
     if menu == "إضافة عميل جديد":
         st.header("➕ إضافة عميل جديد")
         with st.form("add_customer_form"):
@@ -628,14 +602,3 @@ if st.session_state.user_type is None:
             ])
             # باقي الكود هنا...
             st.form_submit_button("إرسال الطلب")
-
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
-
-
