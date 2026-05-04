@@ -1,166 +1,75 @@
+# --- 1. المكتبات ---
 import base64
 import streamlit as st
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
 from fpdf import FPDF
-import plotly.express as px
-import io
 import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. الإعدادات والروابط المركزية ---
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
-LOGO_PATH = "logo.png"
-ADMIN_PASSWORD = "HgM18082019$&)"
-COMPANY_PHONE = "01286609535"
-
-# --- 2. الدوال المساعدة ---
-def to_num(val):
+# --- 2. الدوال المساعدة وكلاس الـ PDF (يجب أن يكونوا في البداية) ---
+def format_ar(text):
+    if not text or str(text).lower() == "none": return ""
     try:
-        if pd.isna(val) or str(val).strip() == "": return 0
-        return int(float(str(val).replace(',', '').strip()))
-    except: return 0
+        # معالجة النصوص العربية للعرض الصحيح
+        return get_display(reshape(str(text)))
+    except: return str(text)
 
-def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
-    payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
-    try:
-        response = requests.post(WEB_APP_URL, json=payload, timeout=15)
-        return response.status_code == 200
-    except: return False
-
-@st.cache_data(ttl=1)
-def load_data(gid):
-    url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
-    try:
-        df = pd.read_csv(url)
-        df.columns = [str(c).strip() for c in df.columns]
-        df['row_index_internal'] = range(2, len(df) + 2)
-        return df.fillna("")
-    except: return pd.DataFrame()
-
-def parse_dt(val):
-    if not val or str(val).strip() == "": return None
-    val = str(val).strip()
-    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-        try: return pd.to_datetime(val, format=fmt)
-        except: continue
-    return pd.to_datetime(val, errors='coerce')
-
-def read_gsheet(sheet_name):
-    # دالة افتراضية لتحميل بيانات المتجر بناءً على الاسم
-    gids = {"Store_Products": "123456789"} # يجب التأكد من الـ GID الصحيح لهذا الشيت
-    return load_data(gids.get(sheet_name, "0"))
-
-# --- 3. تحميل البيانات ---
-df_c = load_data("0")          # Customers
-df_m = load_data("2120582392") # Maintenance
-df_inv = load_data("1767710106") # Inventory
-df_exp = load_data("288947510")  # Expenses
-df_store = load_data("1168172935") # Store_Products (مثال للـ GID)
-
-# التأكد من تحويل الأعمدة الرقمية لضمان عدم حدوث أخطاء في الحسابات
-if not df_store.empty:
-    df_store['Price'] = df_store['Price'].apply(to_num)
-    df_store['Old_Price'] = df_store['Old_Price'].apply(to_num)
-
-st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="🚰")
-
-if 'user_type' not in st.session_state: st.session_state.user_type = None
-
-# --- 3. معالجة بيانات الصيانات والمصروفات ---
-
-# معالجة شيت الصيانات
-if not df_m.empty:
-    # تحويل التاريخ الحالي لعمود برمجي
-    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
-    # تحويل المبالغ لأرقام
-    df_m['amount_num'] = df_m['amount'].apply(to_num)
-else:
-    # إذا كانت الشيت فارغة تماماً، ننشئ الأعمدة كأعمدة فارغة بنوع بيانات محدد
-    df_m['v_date_dt'] = pd.Series(dtype='datetime64[ns]')
-    df_m['amount_num'] = pd.Series(dtype='int')
-
-# معالجة شيت المصروفات
-if not df_exp.empty:
-    df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
-else:
-    # استخدام pd.Series يمنع الخطأ عند إضافة أول مصروف
-    df_exp['exp_date_dt'] = pd.Series(dtype='datetime64[ns]')
+class PDF_Report(FPDF):
+    def footer(self):
+        self.set_y(-15)
+        # استخدام خط Arial الافتراضي للفوتر (إنجليزي فقط)
+        self.set_font('Arial', 'I', 8)
+        self.cell(0, 10, f"Healthy Water | {COMPANY_PHONE}", 0, 0, 'C')
 
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # 1. محاولة تسجيل الخط العربي
-    import os
+    # محاولة تحميل الخط العربي - تأكد من رفع ملف Arial.ttf على GitHub
     font_path = "Arial.ttf"
-    has_font = os.path.exists(font_path)
-    
-    if has_font:
-        pdf.add_font('ArabicFont', '', font_path)
+    if os.path.exists(font_path):
+        pdf.add_font('ArabicFont', '', font_path, uni=True)
         pdf.set_font('ArabicFont', '', 16)
-        font_to_use = 'ArabicFont'
+        use_arabic = True
     else:
         pdf.set_font('Arial', 'B', 16)
-        font_to_use = 'Arial'
+        use_arabic = False
 
-    # 2. اللوجو
-    try:
-        pdf.image("logo.png", x=10, y=8, w=40) 
-    except:
-        pass
+    # اللوجو
+    try: pdf.image("logo.png", x=10, y=8, w=40) 
+    except: pass
 
-    # 3. معلومات العميل
+    # العنوان ومعلومات العميل
     pdf.set_y(40)
-    # نستخدم format_ar فقط إذا كان الخط العربي موجوداً، وإلا نرسل نصاً إنجليزياً بسيطاً
-    report_title = format_ar(f"تقرير صيانة: {cust_row['name']}") if has_font else f"Maintenance Report: {cust_row['name']}"
-    pdf.cell(0, 10, report_title, 0, 1, 'C')
+    name_text = format_ar(f"تقرير العميل: {cust_row['name']}") if use_arabic else f"Customer: {cust_row['name']}"
+    pdf.cell(0, 10, name_text, 0, 1, 'C')
     
-    if has_font: pdf.set_font('ArabicFont', '', 12)
-    else: pdf.set_font('Arial', '', 12)
-    
-    phone_text = format_ar(f"رقم الهاتف: {cust_row['phone']}") if has_font else f"Phone: {cust_row['phone']}"
-    pdf.cell(0, 8, phone_text, 0, 1, 'C')
-    
-    # 4. إعدادات الجدول
+    # إعدادات الجدول
     pdf.set_y(65)
-    # العناوين بالإنجليزية لضمان عدم حدوث خطأ الترميز في حال غياب الخط
     cols = ['Notes', 'Amount', 'Other', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'Date']
     widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
     pdf.set_fill_color(173, 216, 230)
-    pdf.set_font('Arial', 'B', 10) # رأس الجدول بالإنجليزية دائماً للأمان
+    pdf.set_font('Arial', 'B', 10)
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, col, 1, 0, 'C', True)
     pdf.ln()
 
-    # 5. محتوى الجدول
-    if has_font: pdf.set_font('ArabicFont', '', 10)
+    # محتوى الجدول
+    if use_arabic: pdf.set_font('ArabicFont', '', 10)
     else: pdf.set_font('Arial', '', 10)
     
-    history_df = history_df.reset_index(drop=True)
     for i, r in history_df.iterrows():
-        if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
-        else: pdf.set_fill_color(245, 245, 245)
-            
-        # ملاحظات (نعالجها بحذر)
-        val_notes = format_ar(str(r['notes'])) if has_font else str(r['notes']).encode('ascii', 'ignore').decode('ascii')
-        pdf.cell(widths[0], 8, val_notes, 1, 0, 'R' if has_font else 'L', True)
+        fill = (i % 2 != 0)
+        pdf.set_fill_color(245, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
         
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
-        
-        val_other = format_ar(str(r.get('other', ''))) if has_font else ""
-        pdf.cell(widths[2], 8, val_other, 1, 0, 'C', True)
-        
-        for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
-            val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(15, 8, val, 1, 0, 'C', True)
-            
-        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', True)
-
-    return bytes(pdf.output())
+        # ملاحظات العميل
+        note = format_ar(str(r['notes'])) if use_arabic else str(r['notes'])
+        pdf.cell(widths[0], 8, note, 1, 0, 'R' if use_arabic else 'L', fill)
+        # ... بقية الخلايا كما هي في كودك
 
 # --- 5. تسجيل الدخول ---
 if st.session_state.user_type is None:
