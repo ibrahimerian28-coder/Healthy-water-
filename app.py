@@ -9,30 +9,15 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. الإعدادات ---
+# --- 1. الإعدادات والتحميل ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 COMPANY_PHONE = "01286609535"
 
-# --- 2. الدوال المساعدة ---
 def format_ar(text):
     if text is None or str(text).strip().lower() == "none" or str(text).strip() == "": 
         return ""
     return get_display(reshape(str(text)))
-
-def to_num(val):
-    try:
-        if pd.isna(val) or str(val).strip() == "" or str(val).lower() == "none": return 0
-        return int(float(str(val).replace(',', '').strip()))
-    except: return 0
-
-def parse_dt(val):
-    if not val or str(val).strip().lower() == "none": return None
-    val = str(val).strip()
-    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-        try: return pd.to_datetime(val, format=fmt)
-        except: continue
-    return pd.to_datetime(val, errors='coerce')
 
 @st.cache_data(ttl=1)
 def load_data(gid):
@@ -41,11 +26,23 @@ def load_data(gid):
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
         df['row_index_internal'] = range(2, len(df) + 2)
-        # استبدال أي None بـ نص فارغ فوراً عند التحميل
         return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
     except: return pd.DataFrame()
 
-# --- 3. كلاس الـ PDF المحسن ---
+# --- 2. تحميل البيانات الأساسية ---
+df_c = load_data("0") # شيت العملاء
+
+# --- 3. الحل الجذري للـ NameError (تأمين متغير البحث) ---
+# لازم السطر ده يكون قبل أي عملية فلترة أو استخدام لمتغير search
+search = st.sidebar.text_input("بحث عن عميل (اسم أو رقم):", "")
+
+# السطر اللي كان بيضرب (دلوقتي search مضمون إنه موجود)
+if not df_c.empty:
+    filtered = df_c[df_c.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)] if search else df_c
+else:
+    filtered = pd.DataFrame()
+
+# --- 4. كلاس الـ PDF (النسخة المستقرة) ---
 class PDF_Report(FPDF):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -62,7 +59,6 @@ class PDF_Report(FPDF):
         self.set_font(self.font_name_ar, size=8)
         self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
 
-# --- 4. دالة توليد الـ PDF ومعالجة مخرجاتها ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -103,18 +99,7 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[9], 8, str(r.get('amount', '0')), border=1, align='C', fill=True)
         pdf.cell(widths[10], 8, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
 
-    # الحل لمشكلة الـ Streamlit: إخراج الـ PDF كـ bytes
     return bytes(pdf.output())
-
-# --- 5. عند استخدام الزر في كودك ---
-# تأكد أن استدعاء الزر يكون هكذا:
-# pdf_bytes = generate_customer_pdf(selected_row, history_data)
-# st.download_button(
-#     label="تحميل التقرير PDF",
-#     data=pdf_bytes,
-#     file_name="report.pdf",
-#     mime="application/pdf"
-# ) 
 
 
 # --- 5. تسجيل الدخول ---
