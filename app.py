@@ -64,30 +64,47 @@ if not df_exp.empty:
 # تأمين متغير البحث
 search = st.sidebar.text_input("بحث عن عميل:", "")
 
-# --- 1. تحديث دالة التنسيق لتضع "-" مكان الفراغ أو None ---
+# --- 1. دالة التنسيق (لإخفاء None ووضع شرطة) ---
 def format_ar(text):
-    # فحص صارم للقيم الفارغة أو None
     if text is None or str(text).strip().lower() in ["none", "nan", "null", ""]: 
         return "-"
     return get_display(reshape(str(text)))
 
-# --- 2. دالة توليد الـ PDF المعدلة بالكامل ---
+# --- 2. كلاس الـ PDF (لازم يكون قبل الدالة اللي بتستخدمه) ---
+class PDF_Report(FPDF):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.font_ar = "Arial"
+        if os.path.exists("Amiri-Regular.ttf"):
+            self.add_font("Amiri", style="", fname="Amiri-Regular.ttf")
+            self.font_ar = "Amiri"
+        elif os.path.exists("arial.ttf"):
+            self.add_font("CustomArial", style="", fname="arial.ttf")
+            self.font_ar = "CustomArial"
+
+    def footer(self):
+        self.set_y(-15)
+        # خط الفوتر كبير وواضح (16)
+        self.set_font(self.font_ar, size=16) 
+        self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
+
+# --- 3. دالة توليد الـ PDF (بتستخدم الكلاس اللي فوقها) ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     f = pdf.font_ar
     
-    # شعار الشركة
     try:
         if os.path.exists(LOGO_PATH):
             pdf.image(LOGO_PATH, x=10, y=8, w=30)
     except: pass
 
-    # بيانات العميل الأساسية
+    # العنوان الرئيسي
     pdf.set_y(35)
     pdf.set_font(f, size=20)
     pdf.cell(0, 10, format_ar(f"سجل صيانات العميل: {cust_row.get('name', '')}"), ln=1, align='C')
     
+    # بيانات العميل
     pdf.set_font(f, size=14)
     pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row.get('phone', '')}"), ln=1, align='C')
     pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), ln=1, align='C')
@@ -103,35 +120,33 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[i], 10, format_ar(col), border=1, align='C', fill=True)
     pdf.ln()
 
-    # كتابة الصيانات
+    # كتابة كل سجلات الصيانة
     pdf.set_font(f, size=10)
-    
     if not history_df.empty:
-        # الترتيب التنازلي (الأحدث أولاً)
+        # ترتيب تنازلي (الأحدث فوق)
         history_sorted = history_df.copy()
         if 'v_date_dt' in history_sorted.columns:
             history_sorted = history_sorted.sort_values('v_date_dt', ascending=False)
         
         for i, (idx, r) in enumerate(history_sorted.iterrows()):
-            # تبديل لون الصفوف
             if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
             else: pdf.set_fill_color(245, 245, 245)
             
-            # التاريخ (إذا كان فارغاً نضع شرطة)
-            visit_date = str(r.get('visit_date', ''))
-            pdf.cell(widths[0], 10, visit_date if visit_date.strip().lower() not in ["none", ""] else "-", border=1, align='C', fill=True)
+            # التاريخ
+            v_date = str(r.get('visit_date', ''))
+            pdf.cell(widths[0], 10, v_date if v_date.strip().lower() not in ["none", ""] else "-", border=1, align='C', fill=True)
             
-            # الشمعات (استبدال X بكلمة "تم" أو "-" لو لم يتم التغيير)
+            # الشمعات (استبدال X بكلمة "تم" أو "-")
             for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
                 val = str(r.get(p, '')).lower()
                 mark = format_ar("تم") if val in ['true', '1', '✅', 'yes', 'نعم'] else "-"
                 pdf.cell(12, 10, mark, border=1, align='C', fill=True)
             
-            # الخانات النصية والمبلغ
+            # الخانات النصية
             pdf.cell(widths[8], 10, format_ar(r.get('other', '')), border=1, align='C', fill=True)
             
-            amount = str(r.get('amount', '0'))
-            pdf.cell(widths[9], 10, amount if amount not in ["0", "None", "nan"] else "-", border=1, align='C', fill=True)
+            amt = str(r.get('amount', '0'))
+            pdf.cell(widths[9], 10, amt if amt not in ["0", "None", "nan"] else "-", border=1, align='C', fill=True)
             
             # الملاحظات
             pdf.cell(widths[10], 10, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
