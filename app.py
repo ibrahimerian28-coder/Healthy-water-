@@ -188,130 +188,74 @@ else:
 # --- كلاس الـ PDF (يجب أن يكون أولاً) ---
 
 class PDF_Report(FPDF):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # يجب توفير ملف الخط في مجلد الكود
+        try:
+            self.add_font('Amiri', '', 'Amiri-Regular.ttf', unicode=True)
+            self.font_name = 'Amiri'
+        except:
+            self.font_name = 'Arial' # fallback في حال عدم وجود الخط
 
     def footer(self):
-
         self.set_y(-15)
-
-        try:
-
-            self.set_font('Arial', 'I', 8)
-
-            # النص بالأسفل
-
-            footer_text = f"Healthy Water | {COMPANY_PHONE}"
-
-            self.cell(0, 10, footer_text, 0, 0, 'C')
-
-        except:
-
-            pass
+        self.set_font(self.font_name, '', 8)
+        footer_text = format_ar(f"Healthy Water | {COMPANY_PHONE}")
+        self.cell(0, 10, footer_text, 0, 0, 'C')
 
 
 
 # --- دالة توليد الـ PDF المصححة ---
 
 def generate_customer_pdf(cust_row, history_df):
-
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
-
     pdf.add_page()
-
     
-
-    # 1. اللوجو (تم ضبطه ليكون بالأعلى ولا يغطي الجدول)
+    # استخدام الخط العربي المضاف
+    font = pdf.font_name 
 
     try:
+        pdf.image(LOGO_PATH, x=10, y=8, w=30) 
+    except: pass
 
-        pdf.image("logo.png", x=10, y=8, w=40) 
-
-    except:
-
-        pass
-
-
-
-    # 2. معلومات العميل (تبدأ من Y=40)
-
-    pdf.set_y(40)
-
-    # ملاحظة: تأكد من تعريف font_name أو استبداله بـ Arial إذا لم يتوفر خط عربي
-
-    pdf.set_font('Arial', 'B', 16)
-
-    pdf.cell(0, 10, format_ar(f"Customer Report: {cust_row['name']}"), 0, 1, 'C')
-
-    pdf.set_font('Arial', '', 12)
-
-    pdf.cell(0, 8, format_ar(f"Phone: {cust_row['phone']}"), 0, 1, 'C')
-
+    pdf.set_y(35)
+    pdf.set_font(font, '', 18)
+    pdf.cell(0, 10, format_ar(f"تقرير صيانة العميل: {cust_row['name']}"), 0, 1, 'C')
     
-
-    # 3. إعدادات الجدول (يبدأ من ارتفاع 65 لترك مساحة كافية)
-
-    pdf.set_y(65)
-
-    cols = ['Notes', 'Amount', 'Other', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'Date']
-
-    widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
-
+    pdf.set_font(font, '', 12)
+    pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row['phone']}"), 0, 1, 'C')
+    pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), 0, 1, 'C')
     
-
-    # تلوين رأس الجدول
-
-    pdf.set_fill_color(173, 216, 230) # أزرق فاتح
-
+    pdf.ln(5)
+    
+    # إعداد الجدول - عكس ترتيب الأعمدة ليكون من اليمين لليسار
+    cols = ['التاريخ', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'أخرى', 'المبلغ', 'ملاحظات']
+    widths = [25, 12, 12, 12, 12, 12, 12, 12, 30, 20, 100]
+    
+    pdf.set_fill_color(200, 220, 255)
+    pdf.set_font(font, '', 10)
+    
+    # رسم الرأس
     for i, col in enumerate(cols):
-
-        pdf.cell(widths[i], 10, col, 1, 0, 'C', True)
-
+        pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-
-
-    # 4. محتوى الجدول مع تلوين الصفوف بالتناوب
-
-    pdf.set_font('Arial', '', 10)
-
-    history_df = history_df.reset_index(drop=True)
-
-    
-
+    # رسم البيانات
+    pdf.set_font(font, '', 9)
     for i, r in history_df.iterrows():
-
-        # تلوين الصفوف: أبيض ورمادي فاتح جداً
-
-        if i % 2 == 0:
-
-            pdf.set_fill_color(255, 255, 255) # أبيض
-
-        else:
-
-            pdf.set_fill_color(245, 245, 245) # رمادي
-
-            
-
-        pdf.cell(widths[0], 8, format_ar(str(r['notes'])), 1, 0, 'L', True)
-
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
-
-        pdf.cell(widths[2], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
-
+        fill = (i % 2 == 0)
+        pdf.set_fill_color(245, 245, 245) if not fill else pdf.set_fill_color(255, 255, 255)
         
-
-        # الشمعات
-
-        for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
-
+        pdf.cell(widths[0], 8, str(r['visit_date']), 1, 0, 'C', True)
+        
+        # خلايا الشمعات (علامة صح)
+        for part in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
             val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-
-            pdf.cell(15, 8, val, 1, 0, 'C', True)
-
+            pdf.cell(12, 8, val, 1, 0, 'C', True)
             
-
-        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', True)
-
-
+        pdf.cell(widths[8], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
+        pdf.cell(widths[9], 8, str(r['amount']), 1, 0, 'C', True)
+        pdf.cell(widths[10], 8, format_ar(str(r['notes'])), 1, 1, 'R', True) # محاذاة اليمين للملاحظات
 
     return bytes(pdf.output())
 
