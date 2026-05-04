@@ -108,46 +108,46 @@ class PDF_Report(FPDF):
         self.line(10, self.get_y(), 287, self.get_y())
         self.cell(0, 10, footer_text, 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
 
-def generate_customer_pdf(cust_row, history_df):
-    pdf = PDF_Report(orientation='L', unit='mm', format='A4')
-    pdf.add_page()
+    def generate_customer_pdf(cust_row, history_df):
+        pdf = PDF_Report(orientation='L', unit='mm', format='A4')
+        pdf.add_page()
     
-    # ... (نفس إعدادات الخطوط واللوجو) ...
+        # ... (نفس إعدادات الخطوط واللوجو) ...
     
-    # تأمين مساحة اللوجو: نبدأ الجدول من Y=75 بدلاً من 60 لضمان عدم التداخل
-    pdf.set_y(75) 
+        # تأمين مساحة اللوجو: نبدأ الجدول من Y=75 بدلاً من 60 لضمان عدم التداخل
+        pdf.set_y(75) 
 
-    cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
-    widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
+        cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
+        widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # تلوين رأس الجدول (أزرق فاتح)
-    pdf.set_fill_color(173, 216, 230) 
-    pdf.set_font('ArabicFont', '', 11) if has_arabic else pdf.set_font('Arial', 'B', 11)
-    for i, col in enumerate(cols):
-        pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
-    pdf.ln()
+        # تلوين رأس الجدول (أزرق فاتح)
+        pdf.set_fill_color(173, 216, 230) 
+        pdf.set_font('ArabicFont', '', 11) if has_arabic else pdf.set_font('Arial', 'B', 11)
+        for i, col in enumerate(cols):
+            pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
+        pdf.ln()
 
-    # رسم الصفوف بتلوين متبادل (رمادي وأبيض)
-    pdf.set_font('ArabicFont', '', 10) if has_arabic else pdf.set_font('Arial', '', 10)
-    for index, r in history_df.iterrows():
-        # إذا كان رقم الصف زوجي نلون بالرمادي الفاتح، وإذا فردي نتركه أبيض
-        if index % 2 == 0:
-            pdf.set_fill_color(240, 240, 240) # رمادي فاتح جداً
-        else:
-            pdf.set_fill_color(255, 255, 255) # أبيض
+        # رسم الصفوف بتلوين متبادل (رمادي وأبيض)
+        pdf.set_font('ArabicFont', '', 10) if has_arabic else pdf.set_font('Arial', '', 10)
+        for index, r in history_df.iterrows():
+            # إذا كان رقم الصف زوجي نلون بالرمادي الفاتح، وإذا فردي نتركه أبيض
+            if index % 2 == 0:
+                pdf.set_fill_color(240, 240, 240) # رمادي فاتح جداً
+            else:
+                pdf.set_fill_color(255, 255, 255) # أبيض
             
-        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', True)
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
-        pdf.cell(widths[2], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
+            pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', True)
+            pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
+            pdf.cell(widths[2], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
         
-        # الشمعات
-        for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
-            val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(15, 8, val, 1, 0, 'C', True)
+            # الشمعات
+            for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
+                val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
+                pdf.cell(15, 8, val, 1, 0, 'C', True)
             
-        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', True)
+            pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', True)
 
-    return bytes(pdf.output())
+        return bytes(pdf.output())
 
 # --- 5. تسجيل الدخول ---
 if st.session_state.user_type is None:
