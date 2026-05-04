@@ -10,26 +10,21 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. الإعدادات والروابط المركزية ---
+# --- 1. الإعدادات ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
-ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
 
 # --- 2. الدوال المساعدة ---
+def format_ar(text):
+    if not text or str(text).strip() == "": return ""
+    return get_display(reshape(str(text)))
+
 def to_num(val):
     try:
         if pd.isna(val) or str(val).strip() == "": return 0
         return int(float(str(val).replace(',', '').strip()))
     except: return 0
-
-def format_ar(text):
-    if not text or str(text).strip() == "":
-        return ""
-    # دقة المعالجة هنا هي المفتاح
-    reshaped_text = reshape(str(text))
-    bidi_text = get_display(reshaped_text)
-    return bidi_text
 
 @st.cache_data(ttl=1)
 def load_data(gid):
@@ -37,103 +32,78 @@ def load_data(gid):
     try:
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
-        df['row_index_internal'] = range(2, len(df) + 2)
         return df.fillna("")
     except: return pd.DataFrame()
 
-def parse_dt(val):
-    if not val or str(val).strip() == "": return None
-    val = str(val).strip()
-    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-        try: return pd.to_datetime(val, format=fmt)
-        except: continue
-    return pd.to_datetime(val, errors='coerce')
-
-# --- 3. تحميل ومعالجة البيانات ---
-df_c = load_data("0")          
-df_m = load_data("2120582392") 
-df_inv = load_data("1767710106") 
-df_exp = load_data("288947510")  
-df_store = load_data("1168172935") 
-
-if not df_m.empty:
-    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
-    df_m['amount_num'] = df_m['amount'].apply(to_num)
-
-# --- 4. كلاس الـ PDF (تعديل جذري لمنع الـ Encoding Error) ---
+# --- 3. كلاس الـ PDF (النسخة المتوافقة مع fpdf2 الحديثة) ---
 class PDF_Report(FPDF):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.added_font = "Arial" # الافتراضي
-        # محاولة تحميل الخط العربي
-        font_file = "Amiri-Regular.ttf"
-        if os.path.exists(font_file):
-            self.add_font('Amiri', '', font_file, unicode=True)
-            self.added_font = 'Amiri'
+        self.font_name_ar = "Arial" # افتراضي
+        
+        # محاولة تحميل الخط (بدون unicode=True للنسخ الجديدة)
+        if os.path.exists("Amiri-Regular.ttf"):
+            self.add_font("Amiri", style="", fname="Amiri-Regular.ttf")
+            self.font_name_ar = "Amiri"
         elif os.path.exists("arial.ttf"):
-            self.add_font('ArabicArial', '', 'arial.ttf', unicode=True)
-            self.added_font = 'ArabicArial'
+            self.add_font("CustomArial", style="", fname="arial.ttf")
+            self.font_name_ar = "CustomArial"
 
     def footer(self):
         self.set_y(-15)
-        self.set_font(self.added_font, '', 8)
-        footer_text = format_ar(f"Healthy Water | {COMPANY_PHONE}")
-        self.cell(0, 10, footer_text, 0, 0, 'C')
+        self.set_font(self.font_name_ar, size=8)
+        self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
 
+# --- 4. دالة توليد الـ PDF ---
 def generate_customer_pdf(cust_row, history_df):
-    # إنشاء الكائن وتحديد الخط فوراً
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # اختيار الخط الذي نجح تحميله في الـ __init__
-    use_font = pdf.added_font
-    pdf.set_font(use_font, '', 16)
-
+    f = pdf.font_name_ar
+    
     try:
         if os.path.exists(LOGO_PATH):
-            pdf.image(LOGO_PATH, x=10, y=8, w=30) 
+            pdf.image(LOGO_PATH, x=10, y=8, w=30)
     except: pass
 
     # العنوان
     pdf.set_y(35)
-    title = format_ar(f"تقرير صيانة العميل: {cust_row['name']}")
-    pdf.cell(0, 10, title, 0, 1, 'C')
+    pdf.set_font(f, size=18)
+    pdf.cell(0, 10, format_ar(f"تقرير صيانة العميل: {cust_row['name']}"), ln=1, align='C')
     
-    # البيانات الفرعية
-    pdf.set_font(use_font, '', 12)
-    pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row['phone']}"), 0, 1, 'C')
-    pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), 0, 1, 'C')
-    
+    # التفاصيل
+    pdf.set_font(f, size=12)
+    pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row['phone']}"), ln=1, align='C')
+    pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), ln=1, align='C')
     pdf.ln(5)
-    
+
     # الجدول
     cols = ['التاريخ', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'أخرى', 'المبلغ', 'ملاحظات']
     widths = [25, 12, 12, 12, 12, 12, 12, 12, 30, 20, 100]
     
     pdf.set_fill_color(200, 220, 255)
-    pdf.set_font(use_font, '', 10)
-    
+    pdf.set_font(f, size=10)
     for i, col in enumerate(cols):
-        pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
+        pdf.cell(widths[i], 10, format_ar(col), border=1, align='C', fill=True)
     pdf.ln()
 
-    pdf.set_font(use_font, '', 9)
+    pdf.set_font(f, size=9)
     for i, r in history_df.iterrows():
-        fill = (i % 2 == 0)
-        pdf.set_fill_color(245, 245, 245) if not fill else pdf.set_fill_color(255, 255, 255)
+        bg = (i % 2 == 0)
+        pdf.set_fill_color(245, 245, 245) if not bg else pdf.set_fill_color(255, 255, 255)
         
-        pdf.cell(widths[0], 8, str(r.get('visit_date', '')), 1, 0, 'C', True)
+        pdf.cell(widths[0], 8, str(r.get('visit_date', '')), border=1, align='C', fill=True)
         
-        for part in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
-            val = str(r.get(part, '')).lower()
-            mark = "X" if val in ['true', '1', '✅', 'yes'] else ""
-            pdf.cell(12, 8, mark, 1, 0, 'C', True)
+        for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
+            mark = "X" if str(r.get(p, '')).lower() in ['true', '1', '✅', 'yes'] else ""
+            pdf.cell(12, 8, mark, border=1, align='C', fill=True)
             
-        pdf.cell(widths[8], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
-        pdf.cell(widths[9], 8, str(r.get('amount', '0')), 1, 0, 'C', True)
-        pdf.cell(widths[10], 8, format_ar(str(r.get('notes', ''))), 1, 1, 'R', True)
+        pdf.cell(widths[8], 8, format_ar(r.get('other', '')), border=1, align='C', fill=True)
+        pdf.cell(widths[9], 8, str(r.get('amount', '0')), border=1, align='C', fill=True)
+        pdf.cell(widths[10], 8, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
 
-    return pdf.output(dest='S').encode('latin-1') # الترميز النهائي للإخراج
+    # الإخراج النهائي كـ bytes مباشرة لـ Streamlit
+    return pdf.output() 
 
 
 # --- 5. تسجيل الدخول ---
