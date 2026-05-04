@@ -1,263 +1,177 @@
 import base64
-
 import streamlit as st
-
 import pandas as pd
-
 import requests
-
 from datetime import datetime, timedelta
-
 from fpdf import FPDF
-
 import plotly.express as px
-
 import io
-
 import os
-
 from arabic_reshaper import reshape
-
 from bidi.algorithm import get_display
 
-
-
 # --- 1. الإعدادات والروابط المركزية ---
-
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
-
 LOGO_PATH = "logo.png"
-
 ADMIN_PASSWORD = "HgM18082019$&)"
-
 COMPANY_PHONE = "01286609535"
 
-
-
 # --- 2. الدوال المساعدة ---
-
 def to_num(val):
-
     try:
-
         if pd.isna(val) or str(val).strip() == "": return 0
-
         return int(float(str(val).replace(',', '').strip()))
-
     except: return 0
 
-
-
 def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
-
     payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
-
     try:
-
         response = requests.post(WEB_APP_URL, json=payload, timeout=15)
-
         return response.status_code == 200
-
     except: return False
 
-
-
 @st.cache_data(ttl=1)
-
 def load_data(gid):
-
     url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
-
     try:
-
         df = pd.read_csv(url)
-
         df.columns = [str(c).strip() for c in df.columns]
-
         df['row_index_internal'] = range(2, len(df) + 2)
-
         return df.fillna("")
-
     except: return pd.DataFrame()
 
-
-
 def parse_dt(val):
-
     if not val or str(val).strip() == "": return None
-
     val = str(val).strip()
-
     for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
-
         try: return pd.to_datetime(val, format=fmt)
-
         except: continue
-
     return pd.to_datetime(val, errors='coerce')
 
-
-
 def read_gsheet(sheet_name):
-
-    # دالة افتراضية لتحميل بيانات المتجر بناءً على الاسم
-
-    gids = {"Store_Products": "123456789"} # يجب التأكد من الـ GID الصحيح لهذا الشيت
-
+    # الدالات المرجعية للـ GIDs
+    gids = {
+        "Customers": "0",
+        "Maintenance": "2120582392",
+        "Inventory": "1767710106",
+        "Expenses": "288947510",
+        "Store_Products": "1168172935"
+    }
     return load_data(gids.get(sheet_name, "0"))
+
 def format_ar(text):
     if not text or str(text).strip() == "":
         return ""
-    # إعادة تشكيل النص ليدعم الحروف المتصلة وعكس الاتجاه
-    reshaped_text = reshape(str(text))
+    # تحويل القيم لغرض العرض الصحيح (تعامل مع الأرقام والنصوص)
+    text = str(text)
+    reshaped_text = reshape(text)
     bidi_text = get_display(reshaped_text)
     return bidi_text
 
 # --- 3. تحميل البيانات ---
-
-df_c = load_data("0")          # Customers
-
-df_m = load_data("2120582392") # Maintenance
-
-df_inv = load_data("1767710106") # Inventory
-
-df_exp = load_data("288947510")  # Expenses
-
-df_store = load_data("1168172935") # Store_Products (مثال للـ GID)
-
-
-
-# التأكد من تحويل الأعمدة الرقمية لضمان عدم حدوث أخطاء في الحسابات
+df_c = load_data("0")          
+df_m = load_data("2120582392") 
+df_inv = load_data("1767710106") 
+df_exp = load_data("288947510")  
+df_store = load_data("1168172935") 
 
 if not df_store.empty:
-
     df_store['Price'] = df_store['Price'].apply(to_num)
-
     df_store['Old_Price'] = df_store['Old_Price'].apply(to_num)
-
-
 
 st.set_page_config(page_title="Healthy Water Pro", layout="wide", page_icon="🚰")
 
-
-
 if 'user_type' not in st.session_state: st.session_state.user_type = None
 
-
-
-# --- 3. معالجة بيانات الصيانات والمصروفات ---
-
-
-
-# معالجة شيت الصيانات
-
+# معالجة بيانات الصيانات
 if not df_m.empty:
-
-    # تحويل التاريخ الحالي لعمود برمجي
-
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
-
-    # تحويل المبالغ لأرقام
-
     df_m['amount_num'] = df_m['amount'].apply(to_num)
-
 else:
+    df_m = pd.DataFrame(columns=['visit_date', 'amount', 'v_date_dt', 'amount_num'])
 
-    # إذا كانت الشيت فارغة تماماً، ننشئ الأعمدة كأعمدة فارغة بنوع بيانات محدد
-
-    df_m['v_date_dt'] = pd.Series(dtype='datetime64[ns]')
-
-    df_m['amount_num'] = pd.Series(dtype='int')
-
-
-
-# معالجة شيت المصروفات
-
+# معالجة بيانات المصروفات
 if not df_exp.empty:
-
     df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
-
 else:
+    df_exp = pd.DataFrame(columns=['date', 'exp_date_dt'])
 
-    # استخدام pd.Series يمنع الخطأ عند إضافة أول مصروف
-
-    df_exp['exp_date_dt'] = pd.Series(dtype='datetime64[ns]')
-
-
-
-# --- كلاس الـ PDF (يجب أن يكون أولاً) ---
-
+# --- 4. كلاس الـ PDF المحسن لليونيكود ---
 class PDF_Report(FPDF):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # يجب توفير ملف الخط في مجلد الكود
+        # محاولة تحميل خط الأميري لليونيكود، وفي حال الفشل نستخدم Arial كخط احتياطي
+        self.font_to_use = 'Amiri'
         try:
             self.add_font('Amiri', '', 'Amiri-Regular.ttf', unicode=True)
-            self.font_name = 'Amiri'
         except:
-            self.font_name = 'Arial' # fallback في حال عدم وجود الخط
+            try:
+                self.add_font('Amiri', '', 'arial.ttf', unicode=True)
+            except:
+                self.font_to_use = 'Arial' # سيظهر العربي كرموز إذا لم يتوفر ملف الخط
 
     def footer(self):
         self.set_y(-15)
-        self.set_font(self.font_name, '', 8)
+        self.set_font(self.font_to_use, '', 8)
         footer_text = format_ar(f"Healthy Water | {COMPANY_PHONE}")
         self.cell(0, 10, footer_text, 0, 0, 'C')
-
-
-
-# --- دالة توليد الـ PDF المصححة ---
 
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # استخدام الخط العربي المضاف
-    font = pdf.font_name 
+    main_font = pdf.font_to_use
 
     try:
-        pdf.image(LOGO_PATH, x=10, y=8, w=30) 
+        if os.path.exists(LOGO_PATH):
+            pdf.image(LOGO_PATH, x=10, y=8, w=30) 
     except: pass
 
+    # العنوان الرئيسي
     pdf.set_y(35)
-    pdf.set_font(font, '', 18)
+    pdf.set_font(main_font, '', 18)
     pdf.cell(0, 10, format_ar(f"تقرير صيانة العميل: {cust_row['name']}"), 0, 1, 'C')
     
-    pdf.set_font(font, '', 12)
+    # بيانات العميل
+    pdf.set_font(main_font, '', 12)
     pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row['phone']}"), 0, 1, 'C')
     pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), 0, 1, 'C')
     
     pdf.ln(5)
     
-    # إعداد الجدول - عكس ترتيب الأعمدة ليكون من اليمين لليسار
+    # إعداد الجدول (من اليمين لليسار)
     cols = ['التاريخ', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'أخرى', 'المبلغ', 'ملاحظات']
     widths = [25, 12, 12, 12, 12, 12, 12, 12, 30, 20, 100]
     
     pdf.set_fill_color(200, 220, 255)
-    pdf.set_font(font, '', 10)
+    pdf.set_font(main_font, '', 10)
     
-    # رسم الرأس
+    # طباعة رأس الجدول
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    # رسم البيانات
-    pdf.set_font(font, '', 9)
-    for i, r in history_df.iterrows():
-        fill = (i % 2 == 0)
-        pdf.set_fill_color(245, 245, 245) if not fill else pdf.set_fill_color(255, 255, 255)
-        
-        pdf.cell(widths[0], 8, str(r['visit_date']), 1, 0, 'C', True)
-        
-        # خلايا الشمعات (علامة صح)
-        for part in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
-            val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(12, 8, val, 1, 0, 'C', True)
+    # طباعة بيانات السجل
+    pdf.set_font(main_font, '', 9)
+    if not history_df.empty:
+        for i, r in history_df.iterrows():
+            fill = (i % 2 == 0)
+            pdf.set_fill_color(245, 245, 245) if not fill else pdf.set_fill_color(255, 255, 255)
             
-        pdf.cell(widths[8], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
-        pdf.cell(widths[9], 8, str(r['amount']), 1, 0, 'C', True)
-        pdf.cell(widths[10], 8, format_ar(str(r['notes'])), 1, 1, 'R', True) # محاذاة اليمين للملاحظات
+            pdf.cell(widths[0], 8, str(r.get('visit_date', '')), 1, 0, 'C', True)
+            
+            # فحص الشمعات
+            for part in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
+                val = str(r.get(part, '')).lower()
+                mark = "X" if val in ['true', '1', '✅', 'yes'] else ""
+                pdf.cell(12, 8, mark, 1, 0, 'C', True)
+                
+            pdf.cell(widths[8], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
+            pdf.cell(widths[9], 8, str(r.get('amount', '0')), 1, 0, 'C', True)
+            # الملاحظات تكون محاذاة لليمين
+            pdf.cell(widths[10], 8, format_ar(str(r.get('notes', ''))), 1, 1, 'R', True)
 
-    return bytes(pdf.output())
+    return pdf.output(dest='S') # إرجاع بصيغة string/bytes لتتوافق مع Streamlit
 
 
 
