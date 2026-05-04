@@ -9,15 +9,30 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. الإعدادات والتحميل ---
+# --- 1. الإعدادات المركزية ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 COMPANY_PHONE = "01286609535"
 
+# --- 2. الدوال المساعدة (تنظيف البيانات والعربي) ---
 def format_ar(text):
     if text is None or str(text).strip().lower() == "none" or str(text).strip() == "": 
         return ""
     return get_display(reshape(str(text)))
+
+def to_num(val):
+    try:
+        if pd.isna(val) or str(val).strip() == "" or str(val).lower() == "none": return 0
+        return int(float(str(val).replace(',', '').strip()))
+    except: return 0
+
+def parse_dt(val):
+    if not val or str(val).strip().lower() == "none": return None
+    val = str(val).strip()
+    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+        try: return pd.to_datetime(val, format=fmt)
+        except: continue
+    return pd.to_datetime(val, errors='coerce')
 
 @st.cache_data(ttl=1)
 def load_data(gid):
@@ -26,43 +41,50 @@ def load_data(gid):
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
         df['row_index_internal'] = range(2, len(df) + 2)
+        # تنظيف فوري لأي قيم None أو فارغة
         return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
     except: return pd.DataFrame()
 
-# --- 2. تحميل البيانات الأساسية ---
-df_c = load_data("0") # شيت العملاء
+# --- 3. تحميل كافة الجداول (تأمين ضد NameError) ---
+df_c = load_data("0")            # العملاء
+df_m = load_data("2120582392")   # الصيانات
+df_inv = load_data("1767710106")  # المخزن
+df_exp = load_data("288947510")   # المصروفات
+df_store = load_data("1168172935") # المتجر
 
-# --- 3. الحل الجذري للـ NameError (تأمين متغير البحث) ---
-# لازم السطر ده يكون قبل أي عملية فلترة أو استخدام لمتغير search
-search = st.sidebar.text_input("بحث عن عميل (اسم أو رقم):", "")
+# معالجة تواريخ وأرقام شيت الصيانات فور التحميل
+if not df_m.empty:
+    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
+    df_m['amount_num'] = df_m['amount'].apply(to_num)
 
-# السطر اللي كان بيضرب (دلوقتي search مضمون إنه موجود)
-if not df_c.empty:
-    filtered = df_c[df_c.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)] if search else df_c
-else:
-    filtered = pd.DataFrame()
+# معالجة شيت المصروفات
+if not df_exp.empty:
+    df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 
-# --- 4. كلاس الـ PDF (النسخة المستقرة) ---
+# تأمين متغير البحث
+search = st.sidebar.text_input("بحث عن عميل:", "")
+
+# --- 4. كلاس الـ PDF (متوافق تماماً) ---
 class PDF_Report(FPDF):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.font_name_ar = "Arial"
+        self.font_ar = "Arial"
         if os.path.exists("Amiri-Regular.ttf"):
             self.add_font("Amiri", style="", fname="Amiri-Regular.ttf")
-            self.font_name_ar = "Amiri"
+            self.font_ar = "Amiri"
         elif os.path.exists("arial.ttf"):
             self.add_font("CustomArial", style="", fname="arial.ttf")
-            self.font_name_ar = "CustomArial"
+            self.font_ar = "CustomArial"
 
     def footer(self):
         self.set_y(-15)
-        self.set_font(self.font_name_ar, size=8)
+        self.set_font(self.font_ar, size=8)
         self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
 
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
-    f = pdf.font_name_ar
+    f = pdf.font_ar
     
     try:
         if os.path.exists(LOGO_PATH):
@@ -88,19 +110,19 @@ def generate_customer_pdf(cust_row, history_df):
     pdf.ln()
 
     pdf.set_font(f, size=9)
-    for i, r in history_df.iterrows():
-        bg = (i % 2 == 0)
-        pdf.set_fill_color(245, 245, 245) if not bg else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(widths[0], 8, str(r.get('visit_date', '')), border=1, align='C', fill=True)
-        for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
-            mark = "X" if str(r.get(p, '')).lower() in ['true', '1', '✅', 'yes'] else ""
-            pdf.cell(12, 8, mark, border=1, align='C', fill=True)
-        pdf.cell(widths[8], 8, format_ar(r.get('other', '')), border=1, align='C', fill=True)
-        pdf.cell(widths[9], 8, str(r.get('amount', '0')), border=1, align='C', fill=True)
-        pdf.cell(widths[10], 8, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
+    if not history_df.empty:
+        for i, r in history_df.iterrows():
+            bg = (i % 2 == 0)
+            pdf.set_fill_color(245, 245, 245) if not bg else pdf.set_fill_color(255, 255, 255)
+            pdf.cell(widths[0], 8, str(r.get('visit_date', '')), border=1, align='C', fill=True)
+            for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
+                mark = "X" if str(r.get(p, '')).lower() in ['true', '1', '✅', 'yes'] else ""
+                pdf.cell(12, 8, mark, border=1, align='C', fill=True)
+            pdf.cell(widths[8], 8, format_ar(r.get('other', '')), border=1, align='C', fill=True)
+            pdf.cell(widths[9], 8, str(r.get('amount', '0')), border=1, align='C', fill=True)
+            pdf.cell(widths[10], 8, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
 
     return bytes(pdf.output())
-
 
 # --- 5. تسجيل الدخول ---
 
