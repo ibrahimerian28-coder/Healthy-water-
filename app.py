@@ -89,66 +89,84 @@ else:
     # استخدام pd.Series يمنع الخطأ عند إضافة أول مصروف
     df_exp['exp_date_dt'] = pd.Series(dtype='datetime64[ns]')
 
-# --- 4. وظيفة توليد الـ PDF ---
-class PDF_Report(FPDF):
-    def footer(self):
-        self.set_y(-15)
-        try:
-            # استخدام الخط العربي إذا كان متاحاً في المسار
-            self.add_font('ArabicFont', '', "Arial.ttf")
-            self.set_font('ArabicFont', '', 11)
-            # استخدام نصوص الشركة من الثوابت المعرفة مسبقاً
-            footer_text = get_display(reshape(f"Healthy Water | للتواصل معنا: {COMPANY_PHONE} 📞 💬"))
-        except:
-            self.set_font('Arial', 'I', 10)
-            footer_text = f"Healthy Water | Contact: {COMPANY_PHONE}"
-        
-        self.set_text_color(128, 128, 128)
-        self.set_draw_color(200, 200, 200)
-        self.line(10, self.get_y(), 287, self.get_y())
-        self.cell(0, 10, footer_text, 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
+# --- 1. إعدادات الخطوط والـ PDF ---
+def check_arabic_font():
+    """فحص وجود ملف الخط العربي"""
+    import os
+    return os.path.exists("Arial.ttf")
 
-    # --- 1. تعريف دالة توليد الـ PDF (يجب أن تكون في الأعلى) ---
+def format_ar(text):
+    """تنسيق النص العربي للعرض في PDF"""
+    if not text or str(text).lower() == "none":
+        return ""
+    try:
+        from arabic_reshaper import reshape
+        from bidi.algorithm import get_display
+        return get_display(reshape(str(text)))
+    except:
+        return str(text)
+
+# --- 2. دالة توليد الـ PDF المصححة ---
 def generate_customer_pdf(cust_row, history_df):
+    has_font = check_arabic_font()
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # 1. إضافة اللوجو
-    # pdf.image("logo.png", x=10, y=8, w=50) # تأكد من وجود الملف
-    
-    # 2. معلومات العميل (تعديل Y لتبدأ تحت اللوجو)
-    pdf.set_y(35)
-    pdf.set_font('ArabicFont', '', 16) if has_arabic else pdf.set_font('Arial', 'B', 16)
+    # إضافة اللوجو (تأكد من وجود الملف أو ضع الكود داخل try)
+    try:
+        pdf.image("logo.png", x=10, y=8, w=40) 
+    except:
+        pass
+
+    # معلومات العميل - نبدأ من Y=40 لترك مساحة للوجو
+    pdf.set_y(40)
+    if has_font:
+        pdf.add_font('ArabicFont', '', "Arial.ttf")
+        pdf.set_font('ArabicFont', '', 16)
+    else:
+        pdf.set_font('Arial', 'B', 16)
+        
     pdf.cell(0, 10, format_ar(f"تقرير صيانة: {cust_row['name']}"), 0, 1, 'C')
-    pdf.set_font('ArabicFont', '', 12) if has_arabic else pdf.set_font('Arial', '', 12)
+    
+    if has_font: pdf.set_font('ArabicFont', '', 12)
+    else: pdf.set_font('Arial', '', 12)
     pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row['phone']}"), 0, 1, 'C')
     
-    # 3. إعدادات الجدول (تبدأ من Y=65 لضمان عدم التداخل مع اللوجو)
-    pdf.set_y(65)
+    # مساحة أمان إضافية قبل الجدول لمنع التداخل
+    pdf.ln(10)
+    current_y = pdf.get_y()
+    if current_y < 70: pdf.set_y(70) # التأكد أن الجدول لا يبدأ قبل ارتفاع 70mm
+
+    # إعدادات الجدول
     cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
     widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # رأس الجدول ملون
+    # رأس الجدول ملون (أزرق فاتح)
     pdf.set_fill_color(173, 216, 230) 
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    # 4. محتوى الجدول مع تلوين الصفوف بالتناوب
-    pdf.set_font('ArabicFont', '', 10) if has_arabic else pdf.set_font('Arial', '', 10)
+    # محتوى الجدول مع تلوين الصفوف بالتناوب (أبيض ورمادي)
+    if has_font: pdf.set_font('ArabicFont', '', 10)
+    else: pdf.set_font('Arial', '', 10)
     
-    for i, (_, r) in enumerate(history_df.iterrows()):
-        # تلوين الصفوف (أبيض ورمادي فاتح)
+    # إعادة تعيين الـ Index لضمان التناوب الصحيح للألوان
+    history_df = history_df.reset_index(drop=True)
+    
+    for i, r in history_df.iterrows():
+        # تلوين الصفوف: الرمادي للصفوف الزوجية والأبيض للفردية
         if i % 2 == 0:
-            pdf.set_fill_color(255, 255, 255)
+            pdf.set_fill_color(245, 245, 245) # رمادي فاتح جداً
         else:
-            pdf.set_fill_color(240, 240, 240)
+            pdf.set_fill_color(255, 255, 255) # أبيض
             
-        pdf.cell(widths[0], 8, format_ar(str(r['notes'])), 1, 0, 'R', True)
+        # ملاحظة: يجب وضع True في آخر كل cell لتفعيل لون الخلفية
+        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', True)
         pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
         pdf.cell(widths[2], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
         
-        # الشمعات (تلقائي)
+        # خانات الشمعات
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
             val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C', True)
