@@ -89,58 +89,70 @@ else:
     # استخدام pd.Series يمنع الخطأ عند إضافة أول مصروف
     df_exp['exp_date_dt'] = pd.Series(dtype='datetime64[ns]')
 
-# --- كلاس الـ PDF (يجب أن يكون أولاً) ---
+# --- 1. الدوال المساعدة للتنسيق (يجب أن تسبق دالة الـ PDF) ---
+def format_ar(text):
+    """تنسيق النصوص للتعامل مع الاتجاهات واللغة العربية"""
+    if not text or str(text).lower() == "none":
+        return ""
+    try:
+        from arabic_reshaper import reshape
+        from bidi.algorithm import get_display
+        return get_display(reshape(str(text)))
+    except:
+        # في حال عدم وجود المكتبات، يعيد النص كما هو
+        return str(text)
+
+# --- 2. كلاس الـ PDF ---
 class PDF_Report(FPDF):
     def footer(self):
         self.set_y(-15)
         try:
             self.set_font('Arial', 'I', 8)
-            # النص بالأسفل
+            # استخدام المتغير العام لرقم الشركة
             footer_text = f"Healthy Water | {COMPANY_PHONE}"
             self.cell(0, 10, footer_text, 0, 0, 'C')
         except:
             pass
 
-# --- دالة توليد الـ PDF المصححة ---
+# --- 3. دالة توليد الـ PDF ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # 1. اللوجو (تم ضبطه ليكون بالأعلى ولا يغطي الجدول)
+    # اللوجو
     try:
         pdf.image("logo.png", x=10, y=8, w=40) 
     except:
         pass
 
-    # 2. معلومات العميل (تبدأ من Y=40)
+    # معلومات العميل (تم ضبط Y لتبدأ بعد اللوجو)
     pdf.set_y(40)
-    # ملاحظة: تأكد من تعريف font_name أو استبداله بـ Arial إذا لم يتوفر خط عربي
     pdf.set_font('Arial', 'B', 16)
     pdf.cell(0, 10, format_ar(f"Customer Report: {cust_row['name']}"), 0, 1, 'C')
     pdf.set_font('Arial', '', 12)
     pdf.cell(0, 8, format_ar(f"Phone: {cust_row['phone']}"), 0, 1, 'C')
     
-    # 3. إعدادات الجدول (يبدأ من ارتفاع 65 لترك مساحة كافية)
+    # إعدادات الجدول (تبدأ من ارتفاع 65)
     pdf.set_y(65)
     cols = ['Notes', 'Amount', 'Other', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'Date']
     widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # تلوين رأس الجدول
-    pdf.set_fill_color(173, 216, 230) # أزرق فاتح
+    # رأس الجدول ملون
+    pdf.set_fill_color(173, 216, 230)
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, col, 1, 0, 'C', True)
     pdf.ln()
 
-    # 4. محتوى الجدول مع تلوين الصفوف بالتناوب
+    # محتوى الجدول مع تلوين الصفوف بالتناوب
     pdf.set_font('Arial', '', 10)
     history_df = history_df.reset_index(drop=True)
     
     for i, r in history_df.iterrows():
-        # تلوين الصفوف: أبيض ورمادي فاتح جداً
+        # تبديل الألوان: أبيض ورمادي فاتح
         if i % 2 == 0:
-            pdf.set_fill_color(255, 255, 255) # أبيض
+            pdf.set_fill_color(255, 255, 255)
         else:
-            pdf.set_fill_color(245, 245, 245) # رمادي
+            pdf.set_fill_color(245, 245, 245)
             
         pdf.cell(widths[0], 8, format_ar(str(r['notes'])), 1, 0, 'L', True)
         pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
