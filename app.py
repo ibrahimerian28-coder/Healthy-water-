@@ -332,6 +332,7 @@ elif st.session_state.user_type == "admin":
         if 'target_customer' in st.session_state:
             try: default_idx = df_c['name'].tolist().index(st.session_state.target_customer)
             except: pass
+            
         with st.form("main_m_form"):
             selected_name = st.selectbox("اختر العميل", df_c['name'].tolist(), index=default_idx)
             v_date = st.date_input("تاريخ الزيارة", datetime.now())
@@ -339,16 +340,39 @@ elif st.session_state.user_type == "admin":
             p1 = c1.checkbox("P1"); p2 = c2.checkbox("P2"); p3 = c3.checkbox("P3")
             mem = c1.checkbox("Membrane"); post = c2.checkbox("Post Carbon")
             calc = c3.checkbox("Calcite"); infra = c1.checkbox("Infrared")
+            
             other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + df_inv['item_name'].tolist())
             amt = st.number_input("المبلغ المحصل (Amount)", step=1)
             nts = st.text_area("ملاحظات")
             spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
+            
             if st.form_submit_button("حفظ الزيارة"):
-                cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
-                data = [selected_name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_choice, amt, nts, str(spec_d) if spec_d else "", cid]
-                if execute_gsheet_action("append", "Maintenance", data):
-                    st.success("تم التسجيل بنجاح!"); st.rerun()
-
+                # جلب رقم الهاتف (الـ ID) الخاص بالعميل المختار
+                cust_info = df_c[df_c['name'] == selected_name]
+                customer_id = str(cust_info['phone'].values[0]) if not cust_info.empty else ""
+                
+                # ترتيب البيانات ليطابق الإكسيل: 
+                # name(1), visit_date(2), P1(3), P2(4), P3(5), membrane(6), post_carbon(7), 
+                # Calcite(8), infrared(9), other(10), amount(11), notes(12), special_date(13), customer_id(14)
+                data_to_send = [
+                    selected_name, 
+                    str(v_date), 
+                    p1, p2, p3, 
+                    mem, post, calc, infra, 
+                    other_choice, 
+                    amt, 
+                    nts, 
+                    str(spec_d) if spec_d else "", 
+                    customer_id
+                ]
+                
+                if execute_gsheet_action("append", "Maintenance", data_to_send):
+                    st.success(f"✅ تم تسجيل صيانة العميل {selected_name} بنجاح!")
+                    # مسح الكاش لضمان ظهور البيانات فوراً في "بيانات العملاء"
+                    st.cache_data.clear() 
+                    st.rerun()
+                else:
+                    st.error("❌ فشل الاتصال بالسيرفر، تأكد من رابط الـ Web App")
     elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
         total_inventory_value = 0 
