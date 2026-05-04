@@ -8,11 +8,12 @@ from fpdf import FPDF
 import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
-# --- الإعدادات المركزية (تأكد من وجودها هنا) ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
-ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
+
+# تعريف داتا فريم فارغ كاحتياط لمنع الـ NameError
+df_c = pd.DataFrame()
 
 # --- 2. الدوال المساعدة وكلاس الـ PDF (يجب أن يكونوا في البداية) ---
 def format_ar(text):
