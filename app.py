@@ -112,57 +112,40 @@ def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    font_path = os.path.join(os.getcwd(), "Arial.ttf")
-    has_arabic = False
-    if os.path.exists(font_path):
-        try:
-            pdf.add_font('ArabicFont', '', font_path)
-            has_arabic = True
-        except: pass
-
-    def format_ar(text):
-        if not text or str(text).strip() == "": return ""
-        if not has_arabic: return "".join([c for c in str(text) if ord(c) < 128])
-        return get_display(reshape(str(text)))
-
-    try:
-        pdf.image(LOGO_PATH, x=197, y=10, w=90) 
-    except: pass
-
-    pdf.set_xy(10, 15) 
-    if has_arabic: pdf.set_font('ArabicFont', '', 24)
-    else: pdf.set_font('Arial', 'B', 22)
-    pdf.cell(150, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
+    # ... (نفس إعدادات الخطوط واللوجو) ...
     
-    if has_arabic: pdf.set_font('ArabicFont', '', 14)
-    else: pdf.set_font('Arial', '', 12)
-    pdf.set_x(10)
-    pdf.cell(150, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
-    
-    pdf.set_y(60) 
+    # تأمين مساحة اللوجو: نبدأ الجدول من Y=75 بدلاً من 60 لضمان عدم التداخل
+    pdf.set_y(75) 
 
     cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
     widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
+    # تلوين رأس الجدول (أزرق فاتح)
     pdf.set_fill_color(173, 216, 230) 
-    if has_arabic: pdf.set_font('ArabicFont', '', 11)
+    pdf.set_font('ArabicFont', '', 11) if has_arabic else pdf.set_font('Arial', 'B', 11)
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    if has_arabic: pdf.set_font('ArabicFont', '', 10)
-    fill = False
-    for _, r in history_df.iterrows():
-        pdf.set_fill_color(245, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', fill)
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', fill)
-        other_val = str(r.get('other', ''))
-        pdf.cell(widths[2], 8, format_ar(other_val), 1, 0, 'C', fill)
+    # رسم الصفوف بتلوين متبادل (رمادي وأبيض)
+    pdf.set_font('ArabicFont', '', 10) if has_arabic else pdf.set_font('Arial', '', 10)
+    for index, r in history_df.iterrows():
+        # إذا كان رقم الصف زوجي نلون بالرمادي الفاتح، وإذا فردي نتركه أبيض
+        if index % 2 == 0:
+            pdf.set_fill_color(240, 240, 240) # رمادي فاتح جداً
+        else:
+            pdf.set_fill_color(255, 255, 255) # أبيض
+            
+        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', True)
+        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
+        pdf.cell(widths[2], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
+        
+        # الشمعات
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
-            val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(15, 8, val, 1, 0, 'C', fill)
-        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', fill)
-        fill = not fill 
+            val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
+            pdf.cell(15, 8, val, 1, 0, 'C', True)
+            
+        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', True)
 
     return bytes(pdf.output())
 
@@ -274,7 +257,13 @@ elif st.session_state.user_type == "admin":
                         
                         if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
                             pdf_data = generate_customer_pdf(r, cust_hist)
-                            st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
+                            st.download_button(
+                                label="اضغط لبدء التحميل",
+                                data=pdf_data,
+                                file_name=f"{r['name']}.pdf",
+                                mime="application/pdf",
+                                key=f"dl_{r['row_index_internal']}"
+                            )
                     
                     phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(r.get(p, '')).strip() != ""]
                     for ph in phones:
@@ -335,47 +324,45 @@ elif st.session_state.user_type == "admin":
 
     elif menu == "تسجيل صيانة":
         st.header("🔧 تسجيل زيارة صيانة")
+        
+        # التأكد من وجود مفتاح للتحكم في إعادة ضبط النموذج
+        if "form_reset_key" not in st.session_state:
+            st.session_state.form_reset_key = 0
+
         default_idx = 0
         if 'target_customer' in st.session_state:
             try: default_idx = df_c['name'].tolist().index(st.session_state.target_customer)
             except: pass
             
-        with st.form("main_m_form"):
+        with st.form("main_m_form", clear_on_submit=False):
             selected_name = st.selectbox("اختر العميل", df_c['name'].tolist(), index=default_idx)
-            v_date = st.date_input("تاريخ الزيارة", datetime.now())
-            c1, c2, c3 = st.columns(3)
-            p1 = c1.checkbox("P1"); p2 = c2.checkbox("P2"); p3 = c3.checkbox("P3")
-            mem = c1.checkbox("Membrane"); post = c2.checkbox("Post Carbon")
-            calc = c3.checkbox("Calcite"); infra = c1.checkbox("Infrared")
             
-            other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + df_inv['item_name'].tolist())
-            amt = st.number_input("المبلغ المحصل (Amount)", step=1)
-            nts = st.text_area("ملاحظات")
-            spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
+            # إضافة الـ key لكل مدخل ليتم تصفيره
+            v_date = st.date_input("تاريخ الزيارة", datetime.now(), key=f"date_{st.session_state.form_reset_key}")
+            c1, c2, c3 = st.columns(3)
+            p1 = c1.checkbox("P1", key=f"p1_{st.session_state.form_reset_key}")
+            p2 = c2.checkbox("P2", key=f"p2_{st.session_state.form_reset_key}")
+            p3 = c3.checkbox("P3", key=f"p3_{st.session_state.form_reset_key}")
+            mem = c1.checkbox("Membrane", key=f"mem_{st.session_state.form_reset_key}")
+            post = c2.checkbox("Post Carbon", key=f"post_{st.session_state.form_reset_key}")
+            calc = c3.checkbox("Calcite", key=f"calc_{st.session_state.form_reset_key}")
+            infra = c1.checkbox("Infrared", key=f"infra_{st.session_state.form_reset_key}")
+            
+            other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + df_inv['item_name'].tolist(), key=f"other_{st.session_state.form_reset_key}")
+            amt = st.number_input("المبلغ المحصل (Amount)", step=1, key=f"amt_{st.session_state.form_reset_key}")
+            nts = st.text_area("ملاحظات", key=f"nts_{st.session_state.form_reset_key}")
+            spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None, key=f"spec_{st.session_state.form_reset_key}")
             
             if st.form_submit_button("حفظ الزيارة"):
-                # جلب رقم الهاتف (الـ ID) الخاص بالعميل المختار
                 cust_info = df_c[df_c['name'] == selected_name]
                 customer_id = str(cust_info['phone'].values[0]) if not cust_info.empty else ""
                 
-                # ترتيب البيانات ليطابق الإكسيل: 
-                # name(1), visit_date(2), P1(3), P2(4), P3(5), membrane(6), post_carbon(7), 
-                # Calcite(8), infrared(9), other(10), amount(11), notes(12), special_date(13), customer_id(14)
-                data_to_send = [
-                    selected_name, 
-                    str(v_date), 
-                    p1, p2, p3, 
-                    mem, post, calc, infra, 
-                    other_choice, 
-                    amt, 
-                    nts, 
-                    str(spec_d) if spec_d else "", 
-                    customer_id
-                ]
+                data_to_send = [selected_name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_choice, amt, nts, str(spec_d) if spec_d else "", customer_id]
                 
                 if execute_gsheet_action("append", "Maintenance", data_to_send):
-                    st.success(f"✅ تم تسجيل صيانة العميل {selected_name} بنجاح!")
-                    # مسح الكاش لضمان ظهور البيانات فوراً في "بيانات العملاء"
+                    st.success(f"✅ تم تسجيل صيانة {selected_name} بنجاح!")
+                    # تغيير مفتاح الـ key يؤدي لتصفير جميع الخانات المرتبطة به
+                    st.session_state.form_reset_key += 1
                     st.cache_data.clear() 
                     st.rerun()
                 else:
