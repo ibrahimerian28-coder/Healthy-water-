@@ -4,7 +4,6 @@ import pandas as pd
 import requests
 from datetime import datetime, timedelta
 from fpdf import FPDF
-import plotly.express as px
 import io
 import os
 from arabic_reshaper import reshape
@@ -17,17 +16,18 @@ COMPANY_PHONE = "01286609535"
 
 # --- 2. الدوال المساعدة ---
 def format_ar(text):
-    if not text or str(text).strip() == "": return ""
+    if text is None or str(text).strip().lower() == "none" or str(text).strip() == "": 
+        return ""
     return get_display(reshape(str(text)))
 
 def to_num(val):
     try:
-        if pd.isna(val) or str(val).strip() == "": return 0
+        if pd.isna(val) or str(val).strip() == "" or str(val).lower() == "none": return 0
         return int(float(str(val).replace(',', '').strip()))
     except: return 0
 
 def parse_dt(val):
-    if not val or str(val).strip() == "": return None
+    if not val or str(val).strip().lower() == "none": return None
     val = str(val).strip()
     for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
         try: return pd.to_datetime(val, format=fmt)
@@ -41,23 +41,11 @@ def load_data(gid):
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
         df['row_index_internal'] = range(2, len(df) + 2)
-        return df.fillna("")
+        # استبدال أي None بـ نص فارغ فوراً عند التحميل
+        return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
     except: return pd.DataFrame()
 
-# --- 3. تحميل ومعالجة البيانات ---
-df_c = load_data("0")          # Customers
-df_m = load_data("2120582392") # Maintenance
-df_inv = load_data("1767710106") # Inventory
-df_exp = load_data("288947510")  # Expenses
-
-# تهيئة متغير البحث لتجنب NameError
-search = "" 
-
-if not df_m.empty:
-    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
-    df_m['amount_num'] = df_m['amount'].apply(to_num)
-
-# --- 4. كلاس الـ PDF (متوافق مع fpdf2) ---
+# --- 3. كلاس الـ PDF المحسن ---
 class PDF_Report(FPDF):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -74,7 +62,7 @@ class PDF_Report(FPDF):
         self.set_font(self.font_name_ar, size=8)
         self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
 
-# --- 5. دالة توليد الـ PDF ---
+# --- 4. دالة توليد الـ PDF ومعالجة مخرجاتها ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -87,10 +75,10 @@ def generate_customer_pdf(cust_row, history_df):
 
     pdf.set_y(35)
     pdf.set_font(f, size=18)
-    pdf.cell(0, 10, format_ar(f"تقرير صيانة العميل: {cust_row['name']}"), ln=1, align='C')
+    pdf.cell(0, 10, format_ar(f"تقرير صيانة العميل: {cust_row.get('name', '')}"), ln=1, align='C')
     
     pdf.set_font(f, size=12)
-    pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row['phone']}"), ln=1, align='C')
+    pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row.get('phone', '')}"), ln=1, align='C')
     pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), ln=1, align='C')
     pdf.ln(5)
 
@@ -115,7 +103,18 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[9], 8, str(r.get('amount', '0')), border=1, align='C', fill=True)
         pdf.cell(widths[10], 8, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
 
-    return pdf.output() 
+    # الحل لمشكلة الـ Streamlit: إخراج الـ PDF كـ bytes
+    return bytes(pdf.output())
+
+# --- 5. عند استخدام الزر في كودك ---
+# تأكد أن استدعاء الزر يكون هكذا:
+# pdf_bytes = generate_customer_pdf(selected_row, history_data)
+# st.download_button(
+#     label="تحميل التقرير PDF",
+#     data=pdf_bytes,
+#     file_name="report.pdf",
+#     mime="application/pdf"
+# ) 
 
 
 # --- 5. تسجيل الدخول ---
