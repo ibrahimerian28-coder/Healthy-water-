@@ -64,32 +64,14 @@ if not df_exp.empty:
 # تأمين متغير البحث
 search = st.sidebar.text_input("بحث عن عميل:", "")
 
-# --- 1. تحديث دالة التنسيق لمنع ظهور None نهائياً ---
+# --- 1. تحديث دالة التنسيق لتضع "-" مكان الفراغ أو None ---
 def format_ar(text):
-    # فحص صارم لكل أشكال كلمة None
+    # فحص صارم للقيم الفارغة أو None
     if text is None or str(text).strip().lower() in ["none", "nan", "null", ""]: 
-        return ""
+        return "-"
     return get_display(reshape(str(text)))
 
-# --- 2. تحديث كلاس الـ PDF (تكبير الخط في الفوتر) ---
-class PDF_Report(FPDF):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.font_ar = "Arial"
-        if os.path.exists("Amiri-Regular.ttf"):
-            self.add_font("Amiri", style="", fname="Amiri-Regular.ttf")
-            self.font_ar = "Amiri"
-        elif os.path.exists("arial.ttf"):
-            self.add_font("CustomArial", style="", fname="arial.ttf")
-            self.font_ar = "CustomArial"
-
-    def footer(self):
-        self.set_y(-15)
-        # تم تكبير الخط هنا من 8 إلى 16 (الضعف)
-        self.set_font(self.font_ar, size=16) 
-        self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
-
-# --- 3. دالة توليد الـ PDF المعدلة (عرض كل الصيانات مرتبة) ---
+# --- 2. دالة توليد الـ PDF المعدلة بالكامل ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
@@ -121,37 +103,39 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[i], 10, format_ar(col), border=1, align='C', fill=True)
     pdf.ln()
 
-    # كتابة كل الصيانات (مرتبة من الأحدث للأقدم)
+    # كتابة الصيانات
     pdf.set_font(f, size=10)
     
     if not history_df.empty:
-        # التأكد من الترتيب التنازلي حسب التاريخ
+        # الترتيب التنازلي (الأحدث أولاً)
         history_sorted = history_df.copy()
         if 'v_date_dt' in history_sorted.columns:
             history_sorted = history_sorted.sort_values('v_date_dt', ascending=False)
         
-        for i, r in history_sorted.iterrows():
-            # تبديل لون الصفوف لسهولة القراءة
+        for i, (idx, r) in enumerate(history_sorted.iterrows()):
+            # تبديل لون الصفوف
             if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
             else: pdf.set_fill_color(245, 245, 245)
             
-            # التاريخ
-            pdf.cell(widths[0], 10, str(r.get('visit_date', '')), border=1, align='C', fill=True)
+            # التاريخ (إذا كان فارغاً نضع شرطة)
+            visit_date = str(r.get('visit_date', ''))
+            pdf.cell(widths[0], 10, visit_date if visit_date.strip().lower() not in ["none", ""] else "-", border=1, align='C', fill=True)
             
-            # الشمعات (علامة X لو تم التغيير)
+            # الشمعات (استبدال X بكلمة "تم" أو "-" لو لم يتم التغيير)
             for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
                 val = str(r.get(p, '')).lower()
-                mark = "X" if val in ['true', '1', '✅', 'yes', 'نعم'] else ""
+                mark = format_ar("تم") if val in ['true', '1', '✅', 'yes', 'نعم'] else "-"
                 pdf.cell(12, 10, mark, border=1, align='C', fill=True)
             
-            # الخانات النصية
+            # الخانات النصية والمبلغ
             pdf.cell(widths[8], 10, format_ar(r.get('other', '')), border=1, align='C', fill=True)
-            pdf.cell(widths[9], 10, str(r.get('amount', '0')), border=1, align='C', fill=True)
             
-            # ملاحظات (مع مراعاة طول النص)
-            notes = format_ar(r.get('notes', ''))
-            pdf.cell(widths[10], 10, notes, border=1, align='R', fill=True)
-            pdf.ln() # الانتقال لسطر جديد لكل صيانة
+            amount = str(r.get('amount', '0'))
+            pdf.cell(widths[9], 10, amount if amount not in ["0", "None", "nan"] else "-", border=1, align='C', fill=True)
+            
+            # الملاحظات
+            pdf.cell(widths[10], 10, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
+            pdf.ln()
 
     return bytes(pdf.output())
 
