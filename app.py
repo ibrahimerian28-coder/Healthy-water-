@@ -89,76 +89,71 @@ else:
     # استخدام pd.Series يمنع الخطأ عند إضافة أول مصروف
     df_exp['exp_date_dt'] = pd.Series(dtype='datetime64[ns]')
 
-# --- 1. الدوال المساعدة للتنسيق (يجب أن تسبق دالة الـ PDF) ---
-def format_ar(text):
-    """تنسيق النصوص للتعامل مع الاتجاهات واللغة العربية"""
-    if not text or str(text).lower() == "none":
-        return ""
-    try:
-        from arabic_reshaper import reshape
-        from bidi.algorithm import get_display
-        return get_display(reshape(str(text)))
-    except:
-        # في حال عدم وجود المكتبات، يعيد النص كما هو
-        return str(text)
-
-# --- 2. كلاس الـ PDF ---
-class PDF_Report(FPDF):
-    def footer(self):
-        self.set_y(-15)
-        try:
-            self.set_font('Arial', 'I', 8)
-            # استخدام المتغير العام لرقم الشركة
-            footer_text = f"Healthy Water | {COMPANY_PHONE}"
-            self.cell(0, 10, footer_text, 0, 0, 'C')
-        except:
-            pass
-
-# --- 3. دالة توليد الـ PDF ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     
-    # اللوجو
+    # 1. محاولة تسجيل الخط العربي
+    import os
+    font_path = "Arial.ttf"
+    has_font = os.path.exists(font_path)
+    
+    if has_font:
+        pdf.add_font('ArabicFont', '', font_path)
+        pdf.set_font('ArabicFont', '', 16)
+        font_to_use = 'ArabicFont'
+    else:
+        pdf.set_font('Arial', 'B', 16)
+        font_to_use = 'Arial'
+
+    # 2. اللوجو
     try:
         pdf.image("logo.png", x=10, y=8, w=40) 
     except:
         pass
 
-    # معلومات العميل (تم ضبط Y لتبدأ بعد اللوجو)
+    # 3. معلومات العميل
     pdf.set_y(40)
-    pdf.set_font('Arial', 'B', 16)
-    pdf.cell(0, 10, format_ar(f"Customer Report: {cust_row['name']}"), 0, 1, 'C')
-    pdf.set_font('Arial', '', 12)
-    pdf.cell(0, 8, format_ar(f"Phone: {cust_row['phone']}"), 0, 1, 'C')
+    # نستخدم format_ar فقط إذا كان الخط العربي موجوداً، وإلا نرسل نصاً إنجليزياً بسيطاً
+    report_title = format_ar(f"تقرير صيانة: {cust_row['name']}") if has_font else f"Maintenance Report: {cust_row['name']}"
+    pdf.cell(0, 10, report_title, 0, 1, 'C')
     
-    # إعدادات الجدول (تبدأ من ارتفاع 65)
+    if has_font: pdf.set_font('ArabicFont', '', 12)
+    else: pdf.set_font('Arial', '', 12)
+    
+    phone_text = format_ar(f"رقم الهاتف: {cust_row['phone']}") if has_font else f"Phone: {cust_row['phone']}"
+    pdf.cell(0, 8, phone_text, 0, 1, 'C')
+    
+    # 4. إعدادات الجدول
     pdf.set_y(65)
+    # العناوين بالإنجليزية لضمان عدم حدوث خطأ الترميز في حال غياب الخط
     cols = ['Notes', 'Amount', 'Other', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'Date']
     widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
     
-    # رأس الجدول ملون
     pdf.set_fill_color(173, 216, 230)
+    pdf.set_font('Arial', 'B', 10) # رأس الجدول بالإنجليزية دائماً للأمان
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, col, 1, 0, 'C', True)
     pdf.ln()
 
-    # محتوى الجدول مع تلوين الصفوف بالتناوب
-    pdf.set_font('Arial', '', 10)
-    history_df = history_df.reset_index(drop=True)
+    # 5. محتوى الجدول
+    if has_font: pdf.set_font('ArabicFont', '', 10)
+    else: pdf.set_font('Arial', '', 10)
     
+    history_df = history_df.reset_index(drop=True)
     for i, r in history_df.iterrows():
-        # تبديل الألوان: أبيض ورمادي فاتح
-        if i % 2 == 0:
-            pdf.set_fill_color(255, 255, 255)
-        else:
-            pdf.set_fill_color(245, 245, 245)
+        if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
+        else: pdf.set_fill_color(245, 245, 245)
             
-        pdf.cell(widths[0], 8, format_ar(str(r['notes'])), 1, 0, 'L', True)
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
-        pdf.cell(widths[2], 8, format_ar(str(r.get('other', ''))), 1, 0, 'C', True)
+        # ملاحظات (نعالجها بحذر)
+        val_notes = format_ar(str(r['notes'])) if has_font else str(r['notes']).encode('ascii', 'ignore').decode('ascii')
+        pdf.cell(widths[0], 8, val_notes, 1, 0, 'R' if has_font else 'L', True)
         
-        # الشمعات
+        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', True)
+        
+        val_other = format_ar(str(r.get('other', ''))) if has_font else ""
+        pdf.cell(widths[2], 8, val_other, 1, 0, 'C', True)
+        
         for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
             val = "X" if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C', True)
