@@ -26,22 +26,42 @@ def to_num(val):
         return int(float(str(val).replace(',', '').strip()))
     except: return 0
 
+def parse_dt(val):
+    if not val or str(val).strip() == "": return None
+    val = str(val).strip()
+    for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%d-%m-%Y']:
+        try: return pd.to_datetime(val, format=fmt)
+        except: continue
+    return pd.to_datetime(val, errors='coerce')
+
 @st.cache_data(ttl=1)
 def load_data(gid):
     url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
     try:
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
+        df['row_index_internal'] = range(2, len(df) + 2)
         return df.fillna("")
     except: return pd.DataFrame()
 
-# --- 3. كلاس الـ PDF (النسخة المتوافقة مع fpdf2 الحديثة) ---
+# --- 3. تحميل ومعالجة البيانات ---
+df_c = load_data("0")          # Customers
+df_m = load_data("2120582392") # Maintenance
+df_inv = load_data("1767710106") # Inventory
+df_exp = load_data("288947510")  # Expenses
+
+# تهيئة متغير البحث لتجنب NameError
+search = "" 
+
+if not df_m.empty:
+    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
+    df_m['amount_num'] = df_m['amount'].apply(to_num)
+
+# --- 4. كلاس الـ PDF (متوافق مع fpdf2) ---
 class PDF_Report(FPDF):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.font_name_ar = "Arial" # افتراضي
-        
-        # محاولة تحميل الخط (بدون unicode=True للنسخ الجديدة)
+        self.font_name_ar = "Arial"
         if os.path.exists("Amiri-Regular.ttf"):
             self.add_font("Amiri", style="", fname="Amiri-Regular.ttf")
             self.font_name_ar = "Amiri"
@@ -54,11 +74,10 @@ class PDF_Report(FPDF):
         self.set_font(self.font_name_ar, size=8)
         self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
 
-# --- 4. دالة توليد الـ PDF ---
+# --- 5. دالة توليد الـ PDF ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
-    
     f = pdf.font_name_ar
     
     try:
@@ -66,18 +85,15 @@ def generate_customer_pdf(cust_row, history_df):
             pdf.image(LOGO_PATH, x=10, y=8, w=30)
     except: pass
 
-    # العنوان
     pdf.set_y(35)
     pdf.set_font(f, size=18)
     pdf.cell(0, 10, format_ar(f"تقرير صيانة العميل: {cust_row['name']}"), ln=1, align='C')
     
-    # التفاصيل
     pdf.set_font(f, size=12)
     pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row['phone']}"), ln=1, align='C')
     pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), ln=1, align='C')
     pdf.ln(5)
 
-    # الجدول
     cols = ['التاريخ', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'أخرى', 'المبلغ', 'ملاحظات']
     widths = [25, 12, 12, 12, 12, 12, 12, 12, 30, 20, 100]
     
@@ -91,18 +107,14 @@ def generate_customer_pdf(cust_row, history_df):
     for i, r in history_df.iterrows():
         bg = (i % 2 == 0)
         pdf.set_fill_color(245, 245, 245) if not bg else pdf.set_fill_color(255, 255, 255)
-        
         pdf.cell(widths[0], 8, str(r.get('visit_date', '')), border=1, align='C', fill=True)
-        
         for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
             mark = "X" if str(r.get(p, '')).lower() in ['true', '1', '✅', 'yes'] else ""
             pdf.cell(12, 8, mark, border=1, align='C', fill=True)
-            
         pdf.cell(widths[8], 8, format_ar(r.get('other', '')), border=1, align='C', fill=True)
         pdf.cell(widths[9], 8, str(r.get('amount', '0')), border=1, align='C', fill=True)
         pdf.cell(widths[10], 8, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
 
-    # الإخراج النهائي كـ bytes مباشرة لـ Streamlit
     return pdf.output() 
 
 
