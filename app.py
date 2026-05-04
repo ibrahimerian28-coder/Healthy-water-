@@ -105,8 +105,13 @@ def read_gsheet(sheet_name):
     gids = {"Store_Products": "123456789"} # يجب التأكد من الـ GID الصحيح لهذا الشيت
 
     return load_data(gids.get(sheet_name, "0"))
-
-
+def format_ar(text):
+    if not text or str(text).strip() == "":
+        return ""
+    # إعادة تشكيل النص ليدعم الحروف المتصلة وعكس الاتجاه
+    reshaped_text = reshape(str(text))
+    bidi_text = get_display(reshaped_text)
+    return bidi_text
 
 # --- 3. تحميل البيانات ---
 
