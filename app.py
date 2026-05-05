@@ -8,6 +8,12 @@ import io
 import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
+# --- تهيئة متغيرات الجلسة (أضف هذا الجزء في البداية) ---
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
 # --- 1. الإعدادات المركزية ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
