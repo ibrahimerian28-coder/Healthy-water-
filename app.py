@@ -410,62 +410,62 @@ elif menu == "المخزن 📦":
         st.metric(label="إجمالي رأس المال (قيمة المخزون الكلية)", value=f"{total_inventory_value} ج.م")
         st.sidebar.metric("إجمالي رأس المال", f"{total_inventory_value} ج.م")
 
-    elif menu == "الاحتياجات 🚨":
-        st.header("🚨 أصناف تحت حد الأمان")
-        needs = df_inv[df_inv['quantity'].apply(to_num) <= df_inv['min_limit'].apply(to_num)]
-        if not needs.empty:
-            st.table(needs[['item_name', 'quantity', 'min_limit']])
-        else:
-            st.success("كل الأصناف متوفرة فوق حد الأمان.")
+elif menu == "الاحتياجات 🚨":
+    st.header("🚨 أصناف تحت حد الأمان")
+    needs = df_inv[df_inv['quantity'].apply(to_num) <= df_inv['min_limit'].apply(to_num)]
+    if not needs.empty:
+        st.table(needs[['item_name', 'quantity', 'min_limit']])
+    else:
+        st.success("كل الأصناف متوفرة فوق حد الأمان.")
 
-    elif menu == "المصروفات":
-        st.header("💵 إدارة المصروفات")
-        selected_date = st.date_input("تاريخ المصروفات", datetime.now())
+elif menu == "المصروفات":
+    st.header("💵 إدارة المصروفات")
+    selected_date = st.date_input("تاريخ المصروفات", datetime.now())
             
-        todays_m = df_m[df_m['v_date_dt'].dt.date == selected_date] if not df_m.empty else pd.DataFrame()
-        auto_parts_cost = 0
-        for _, m_row in todays_m.iterrows():
-            for part in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
-                if str(m_row.get(part, '')).lower() in ['true', '1', '✅']:
-                    price = to_num(df_inv[df_inv['item_name'].str.lower() == part.lower()]['cost_price'].values[0]) if not df_inv[df_inv['item_name'].str.lower() == part.lower()].empty else 0
-                    auto_parts_cost += price
+    todays_m = df_m[df_m['v_date_dt'].dt.date == selected_date] if not df_m.empty else pd.DataFrame()
+    auto_parts_cost = 0
+    for _, m_row in todays_m.iterrows():
+        for part in ['P1','P2','P3','membrane','post_carbon','Calcite','infrared']:
+            if str(m_row.get(part, '')).lower() in ['true', '1', '✅']:
+                price = to_num(df_inv[df_inv['item_name'].str.lower() == part.lower()]['cost_price'].values[0]) if not df_inv[df_inv['item_name'].str.lower() == part.lower()].empty else 0
+                auto_parts_cost += price
             
-        st.info(f"ℹ️ تكلفة قطع الغيار المستهلكة في صيانات اليوم: {auto_parts_cost} ج.م (تُحسب تلقائياً في الأرباح)")
+    st.info(f"ℹ️ تكلفة قطع الغيار المستهلكة في صيانات اليوم: {auto_parts_cost} ج.م (تُحسب تلقائياً في الأرباح)")
 
-        with st.form("exp_form_extended"):
-            st.subheader("تسجيل مصروفات إضافية")
-            c1, c2 = st.columns(2)
-            trans = c1.number_input("انتقالات (transportation)", min_value=0, step=5)
-            neth = c2.number_input("نثريات (sundries)", min_value=0, step=5)
-            monthly = c1.number_input("مصروفات شهرية (monthly_expensess)", min_value=0, step=10)
-            salary = c2.number_input("رواتب (salaries)", min_value=0, step=50)
-            notes = st.text_area("ملاحظات (notes)")
+    with st.form("exp_form_extended"):
+        st.subheader("تسجيل مصروفات إضافية")
+        c1, c2 = st.columns(2)
+        trans = c1.number_input("انتقالات (transportation)", min_value=0, step=5)
+        neth = c2.number_input("نثريات (sundries)", min_value=0, step=5)
+        monthly = c1.number_input("مصروفات شهرية (monthly_expensess)", min_value=0, step=10)
+        salary = c2.number_input("رواتب (salaries)", min_value=0, step=50)
+        notes = st.text_area("ملاحظات (notes)")
                 
-            total_manual = trans + neth + monthly + salary
-            st.markdown(f"**إجمالي المصروفات اليدوية: {total_manual} ج.م**")
+        total_manual = trans + neth + monthly + salary
+        st.markdown(f"**إجمالي المصروفات اليدوية: {total_manual} ج.م**")
                 
-            if st.form_submit_button("حفظ المصروفات في الشيت"):
-                exp_data = [
-                    str(selected_date), # date
-                    trans,              # transportation
-                    neth,               # sundries
-                    monthly,            # monthly_expensess
-                    salary,             # salaries
-                    notes               # notes
-                ]
+        if st.form_submit_button("حفظ المصروفات في الشيت"):
+            exp_data = [
+                str(selected_date), # date
+                trans,              # transportation
+                neth,               # sundries
+                monthly,            # monthly_expensess
+                salary,             # salaries
+                notes               # notes
+            ]
                     
-                if execute_gsheet_action("append", "Expenses", exp_data):
-                    st.success("✅ تم حفظ المصروفات بنجاح")
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("❌ فشل الاتصال بالسيرفر، حاول مرة أخرى")
+            if execute_gsheet_action("append", "Expenses", exp_data):
+                st.success("✅ تم حفظ المصروفات بنجاح")
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("❌ فشل الاتصال بالسيرفر، حاول مرة أخرى")
 
-        if not df_exp.empty:
-            st.divider()
-            st.subheader("📅 آخر المصروفات المسجلة")
-            recent_exp = df_exp.tail(10).iloc[::-1]
-            st.dataframe(recent_exp, use_container_width=True, hide_index=True)
+    if not df_exp.empty:
+        st.divider()
+        st.subheader("📅 آخر المصروفات المسجلة")
+        recent_exp = df_exp.tail(10).iloc[::-1]
+        st.dataframe(recent_exp, use_container_width=True, hide_index=True)
 
 
 elif menu == "الأرباح 📈":
