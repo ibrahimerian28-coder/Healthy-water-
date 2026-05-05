@@ -59,16 +59,40 @@ def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
 
 @st.cache_data(ttl=1)
 def load_data(gid):
-    # تعديل الرابط ليكون بصيغة التصدير CSV مع استخدام المعرف الخاص بك
+    # استخدام معرف الشيت الخاص بك الذي يبدأ بـ 1Dpy...
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
     try:
-        df = pd.read_csv(url)
+        # قراءة البيانات مع تجاهل أخطاء التنسيق البسيطة
+        df = pd.read_csv(url, low_memory=False)
+        
+        # تنظيف أسماء الأعمدة من المسافات
         df.columns = [str(c).strip() for c in df.columns]
-        # إضافة مؤشر الصفوف للتعامل مع التعديل والحذف لاحقاً
+        
+        # تنظيف البيانات نفسها من المسافات الزائدة في النصوص
+        df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+        
+        # إضافة ترقيم الصفوف للعمليات المستقبيلة
         df['row_index_internal'] = range(2, len(df) + 2)
-        return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
-    except: 
+        
+        return df.fillna("") 
+    except Exception as e:
+        st.error(f"⚠️ خطأ في تحميل الصفحة {gid}: {e}")
         return pd.DataFrame()
+
+# --- 5. تحميل وتجهيز الجداول (تأكد من وضعها بعد الدالة مباشرة) ---
+df_c = load_data("0")              # صفحة العملاء
+df_m = load_data("2120582392")     # صفحة الصيانات
+df_inv = load_data("1767710106")    # صفحة المخزن
+df_exp = load_data("288947510")     # صفحة المصروفات
+df_store = load_data("1129472026")  # صفحة المنتجات
+
+# تحويل التواريخ والأرقام لضمان ظهور البيانات في الجداول والرسوم البيانية
+if not df_m.empty and 'visit_date' in df_m.columns:
+    df_m['v_date_dt'] = pd.to_datetime(df_m['visit_date'], errors='coerce')
+    df_m['amount_num'] = pd.to_numeric(df_m['amount'], errors='coerce').fillna(0)
+
+if not df_exp.empty and 'date' in df_exp.columns:
+    df_exp['exp_date_dt'] = pd.to_datetime(df_exp['date'], errors='coerce')
 
 # --- 4. كلاس الـ PDF وتوليد التقارير (لا تغيير هنا) ---
 # ... (بقية كود الـ PDF كما هو لديك)
