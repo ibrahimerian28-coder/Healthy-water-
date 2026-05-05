@@ -59,26 +59,24 @@ def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
 
 @st.cache_data(ttl=1)
 def load_data(gid):
-    # استخدام معرف الشيت الخاص بك الذي يبدأ بـ 1Dpy...
     url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
     try:
-        # قراءة البيانات مع تجاهل أخطاء التنسيق البسيطة
         df = pd.read_csv(url, low_memory=False)
         
-        # تنظيف أسماء الأعمدة من المسافات
+        # تنظيف أسماء الأعمدة
         df.columns = [str(c).strip() for c in df.columns]
         
-        # تنظيف البيانات نفسها من المسافات الزائدة في النصوص
-        df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
-        
-        # إضافة ترقيم الصفوف للعمليات المستقبيلة
+        # تنظيف البيانات مع دعم الإصدارات القديمة والجديدة من Pandas
+        if hasattr(df, 'map'):
+            df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
+        else:
+            df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+            
         df['row_index_internal'] = range(2, len(df) + 2)
-        
         return df.fillna("") 
     except Exception as e:
-        st.error(f"⚠️ خطأ في تحميل الصفحة {gid}: {e}")
+        st.sidebar.error(f"⚠️ فشل تحميل الصفحة {gid}: {e}")
         return pd.DataFrame()
-
 # --- 5. تحميل وتجهيز الجداول (تأكد من وضعها بعد الدالة مباشرة) ---
 df_c = load_data("0")              # صفحة العملاء
 df_m = load_data("2120582392")     # صفحة الصيانات
