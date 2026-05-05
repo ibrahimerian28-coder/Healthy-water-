@@ -12,7 +12,13 @@ from bidi.algorithm import get_display
 # --- 1. الإعدادات والبيانات الأساسية ---
 ADMIN_PASSWORD = "HgM18082019$&)" 
 USER_PASSWORD = "456"
-WEB_APP_URL = "https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/edit?usp=sharing"
+
+# 1. المعرف الخاص بملفك (تم استخراجه من اللينك الذي أرسلته)
+SPREADSHEET_ID = "1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI"
+
+# 2. رابط الـ Web App الصحيح (يجب أن يكون للمكرو وليس للشيت)
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
+
 LOGO_PATH = "logo.png"
 COMPANY_PHONE = "01286609535"
 
@@ -45,6 +51,7 @@ def parse_dt(val):
 def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
     payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
     try:
+        # استخدام الرابط الصحيح للسكريبت
         response = requests.post(WEB_APP_URL, json=payload, timeout=10)
         return response.status_code == 200
     except:
@@ -52,89 +59,34 @@ def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
 
 @st.cache_data(ttl=1)
 def load_data(gid):
-    url = f"https://docs.google.com/spreadsheets/d/1RGDGJaP_lo2Fp2beLqAQvLulqMk2WDJKqLv2g34-ycc/edit?usp=sharing"
+    # تعديل الرابط ليكون بصيغة التصدير CSV مع استخدام المعرف الخاص بك
+    url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=csv&gid={gid}"
     try:
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
+        # إضافة مؤشر الصفوف للتعامل مع التعديل والحذف لاحقاً
         df['row_index_internal'] = range(2, len(df) + 2)
         return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
-    except: return pd.DataFrame()
+    except: 
+        return pd.DataFrame()
 
-# --- 4. كلاس الـ PDF وتوليد التقارير ---
-class PDF_Report(FPDF):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.font_ar = "Arial"
-        if os.path.exists("Amiri-Regular.ttf"):
-            self.add_font("Amiri", style="", fname="Amiri-Regular.ttf")
-            self.font_ar = "Amiri"
-        elif os.path.exists("arial.ttf"):
-            self.add_font("CustomArial", style="", fname="arial.ttf")
-            self.font_ar = "CustomArial"
+# --- 4. كلاس الـ PDF وتوليد التقارير (لا تغيير هنا) ---
+# ... (بقية كود الـ PDF كما هو لديك)
 
-    def footer(self):
-        self.set_y(-15)
-        self.set_font(self.font_ar, size=16) 
-        self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
+# --- 5. تحميل كافة الجداول بالأرقام التي أرسلتها ---
+# تأكد أن هذه الأرقام تطابق الـ gid في شريط العنوان لكل صفحة عندك
+df_c = load_data("0")              # صفحة العملاء
+df_m = load_data("2120582392")     # صفحة الصيانات
+df_inv = load_data("1767710106")    # صفحة المخزن
+df_exp = load_data("288947510")     # صفحة المصروفات
+df_store = load_data("1129472026")  # صفحة المنتجات
 
-def generate_customer_pdf(cust_row, history_df):
-    pdf = PDF_Report(orientation='L', unit='mm', format='A4')
-    pdf.add_page()
-    f = pdf.font_ar
-    try:
-        if os.path.exists(LOGO_PATH):
-            pdf.image(LOGO_PATH, x=10, y=8, w=30)
-    except: pass
-
-    pdf.set_y(35)
-    pdf.set_font(f, size=20)
-    pdf.cell(0, 10, format_ar(f"سجل صيانات العميل: {cust_row.get('name', '')}"), ln=1, align='C')
-    pdf.set_font(f, size=14)
-    pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row.get('phone', '')}"), ln=1, align='C')
-    pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), ln=1, align='C')
-    pdf.ln(10)
-
-    cols = ['التاريخ', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'أخرى', 'المبلغ', 'ملاحظات']
-    widths = [25, 12, 12, 12, 12, 12, 12, 12, 30, 20, 100]
-    
-    pdf.set_fill_color(200, 220, 255)
-    pdf.set_font(f, size=11)
-    for i, col in enumerate(cols):
-        pdf.cell(widths[i], 10, format_ar(col), border=1, align='C', fill=True)
-    pdf.ln()
-
-    pdf.set_font(f, size=10)
-    if not history_df.empty:
-        history_sorted = history_df.copy()
-        if 'v_date_dt' in history_sorted.columns:
-            history_sorted = history_sorted.sort_values('v_date_dt', ascending=False)
-        
-        for i, (idx, r) in enumerate(history_sorted.iterrows()):
-            pdf.set_fill_color(255, 255, 255) if i % 2 == 0 else pdf.set_fill_color(245, 245, 245)
-            v_date = str(r.get('visit_date', ''))
-            pdf.cell(widths[0], 10, v_date if v_date.strip().lower() not in ["none", ""] else "-", border=1, align='C', fill=True)
-            for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
-                val = str(r.get(p, '')).lower()
-                mark = format_ar("تم") if val in ['true', '1', '✅', 'yes', 'نعم'] else "-"
-                pdf.cell(12, 10, mark, border=1, align='C', fill=True)
-            pdf.cell(widths[8], 10, format_ar(r.get('other', '')), border=1, align='C', fill=True)
-            amt = str(r.get('amount', '0'))
-            pdf.cell(widths[9], 10, amt if amt not in ["0", "None", "nan"] else "-", border=1, align='C', fill=True)
-            pdf.cell(widths[10], 10, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
-            pdf.ln()
-    return bytes(pdf.output())
-
-# --- 5. تحميل كافة الجداول ---
-df_c = load_data("0")              
-df_m = load_data("2120582392")     
-df_inv = load_data("1767710106")   
-df_exp = load_data("288947510")     
-df_store = load_data("1129472026") 
-
-if not df_m.empty:
+# تحويل التواريخ فور التحميل لضمان عمل "جدول المواعيد"
+if not df_m.empty and 'visit_date' in df_m.columns:
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
     df_m['amount_num'] = df_m['amount'].apply(to_num)
-if not df_exp.empty:
+
+if not df_exp.empty and 'date' in df_exp.columns:
     df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 # --- 6. نظام تسجيل الدخول ---
 if not st.session_state.logged_in:
