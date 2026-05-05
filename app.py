@@ -289,56 +289,33 @@ elif st.session_state.user_type == "admin":
 
     
 
-    if menu == "إضافة عميل جديد":
-
-        st.header("➕ إضافة عميل جديد")
-
-        with st.form("add_customer_form"):
-
-            existing_areas = sorted(df_c['area'].unique().tolist()) if not df_c.empty else []
-
-            default_areas = ["مدينتي", "بدر", "الشروق", "المستقبل", "الرحاب", "مدينة نصر"]
-
-            areas_list = list(set(existing_areas + default_areas))
-
-            c1, c2 = st.columns(2)
-
-            name = c1.text_input("الاسم (name)")
-
-            phone = c2.text_input("الهاتف الأساسي (phone)")
-
-            p1 = c1.text_input("هاتف 1")
-
-            p2 = c2.text_input("هاتف 2")
-
-            p3 = c1.text_input("هاتف 3")
-
-            p4 = c2.text_input("هاتف 4")
-
-            address = st.text_area("العنوان بالتفصيل (adress)")
-
-            area = st.selectbox("المنطقة (area)", areas_list)
-
-            new_area = st.text_input("أو أضف منطقة جديدة")
-
-            final_area = new_area if new_area else area
-
-            loc = st.text_input("رابط اللوكيشن (location_url)")
-
-            inst_date = st.date_input("تاريخ التركيب (install_date)")
-
-            cycle = st.number_input("دورة الصيانة بالشهر (cycle)", value=3)
-
-            status = st.selectbox("الحالة (status)", ["نشط", "راكد"])
-
-            if st.form_submit_button("حفظ العميل الجديد"):
-
-                data = [name, phone, p1, p2, p3, p4, address, final_area, loc, str(inst_date), cycle, status]
-
-                if execute_gsheet_action("append", "Customers", data):
-
-                    st.success("تم الحفظ بنجاح!"); st.rerun()
-
+    elif menu == "إضافة عميل":
+    st.header("➕ إضافة عميل جديد")
+    with st.form("new_cust_form"):
+        # مدخلات البيانات
+        name = st.text_input("اسم العميل")
+        phone = st.text_input("رقم الهاتف")
+        area = st.text_input("المنطقة")
+        address = st.text_input("العنوان بالتفصيل")
+        install_date = st.date_input("تاريخ التركيب", datetime.now())
+        cycle = st.number_input("دورة الصيانة (بالشهور)", value=3)
+        
+        submit = st.form_submit_button("حفظ العميل")
+        
+        if submit:
+            if name and phone:
+                # 1. تجهيز البيانات في قائمة (List) متوافقة مع أعمدة الشيت
+                # الترتيب: الاسم، الموبايل، 4 خانات موبايل فارغة، العنوان، المنطقة، لوكيشن فارغ، التاريخ، الدورة، الحالة
+                customer_data = [name, phone, "", "", "", "", address, area, "", str(install_date), cycle, "نشط"]
+                
+                # 2. إرسال البيانات (تأكدنا هنا أن اسم المتغير هو customer_data)
+                if execute_gsheet_action("append", "Customers", data=customer_data):
+                    st.success(f"تم إضافة العميل {name} بنجاح!")
+                    st.cache_data.clear() # لتحديث البيانات فوراً
+                else:
+                    st.error("عذراً، فشل الاتصال بجوجل شيت. تأكد من رابط الـ Web App")
+            else:
+                st.warning("يرجى ملء الاسم ورقم الهاتف على الأقل")
 
 
     elif menu == "بيانات العملاء":
