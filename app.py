@@ -565,43 +565,43 @@ elif menu == "الأرباح 📈":
             
 
 # --- 7. إدارة المنتجات ⚙️ ---
-    elif menu == "إدارة المنتجات ⚙️":
-        st.header("⚙️ إدارة منتجات المتجر")
-        with st.form("add_product_form", clear_on_submit=True):
-            st.subheader("إضافة منتج جديد")
-            p_title = st.text_input("اسم المنتج")
-            p_price = st.number_input("السعر الحالي", min_value=0)
-            p_old_price = st.number_input("السعر القديم", min_value=0)
-            p_cat = st.selectbox("التصنيف", ["أجهزة", "شمعات"])
+elif menu == "إدارة المنتجات ⚙️":
+    st.header("⚙️ إدارة منتجات المتجر")
+    with st.form("add_product_form", clear_on_submit=True):
+        st.subheader("إضافة منتج جديد")
+        p_title = st.text_input("اسم المنتج")
+        p_price = st.number_input("السعر الحالي", min_value=0)
+        p_old_price = st.number_input("السعر القديم", min_value=0)
+        p_cat = st.selectbox("التصنيف", ["أجهزة", "شمعات"])
                 
-            # رفع الصور من الجهاز (بحد أقصى 5 صور)
-            uploaded_files = st.file_uploader("ارفع صور المنتج (1-5 صور)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+        # رفع الصور من الجهاز (بحد أقصى 5 صور)
+        uploaded_files = st.file_uploader("ارفع صور المنتج (1-5 صور)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
                 
-            # وصف المنتج
-            p_desc = st.text_area("وصف المنتج التفصيلي", height=200)
+        # وصف المنتج
+        p_desc = st.text_area("وصف المنتج التفصيلي", height=200)
                 
-            if st.form_submit_button("حفظ المنتج"):
-                if not uploaded_files:
-                    st.error("يرجى رفع صورة واحدة على الأقل")
-                elif not p_title:
-                    st.warning("يرجى إدخال اسم المنتج")
+        if st.form_submit_button("حفظ المنتج"):
+            if not uploaded_files:
+                st.error("يرجى رفع صورة واحدة على الأقل")
+            elif not p_title:
+                st.warning("يرجى إدخال اسم المنتج")
+            else:
+                # تحويل الصور لروابط نصية Base64 لتخزينها في الشيت
+                img_links = []
+                for file in uploaded_files[:5]: # التأكد من عدم تجاوز 5 صور
+                    encoded = base64.b64encode(file.read()).decode()
+                    img_links.append(f"data:image/png;base64,{encoded}")
+                        
+                # دمج روابط الصور في نص واحد مفصول بفاصلة
+                all_imgs_str = "||".join(img_links)
+                        
+                new_prod = [str(datetime.now().timestamp()), p_title, p_price, p_old_price, p_cat, all_imgs_str, p_desc]
+                if execute_gsheet_action("append", "Store_Products", new_prod):
+                    st.success("تم إضافة المنتج بنجاح مع الصور!")
+                    st.cache_data.clear()
+                    st.rerun()
                 else:
-                    # تحويل الصور لروابط نصية Base64 لتخزينها في الشيت
-                    img_links = []
-                    for file in uploaded_files[:5]: # التأكد من عدم تجاوز 5 صور
-                        encoded = base64.b64encode(file.read()).decode()
-                        img_links.append(f"data:image/png;base64,{encoded}")
-                        
-                    # دمج روابط الصور في نص واحد مفصول بفاصلة
-                    all_imgs_str = "||".join(img_links)
-                        
-                    new_prod = [str(datetime.now().timestamp()), p_title, p_price, p_old_price, p_cat, all_imgs_str, p_desc]
-                    if execute_gsheet_action("append", "Store_Products", new_prod):
-                        st.success("تم إضافة المنتج بنجاح مع الصور!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error("فشل الاتصال بجوجل شيت")
+                    st.error("فشل الاتصال بجوجل شيت")
 
     # --- 8. المتجر 🛒 (النظام المتكامل: سلة + دفع + إجمالي) ---
     elif menu == "المتجر 🛒":
