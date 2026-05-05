@@ -603,103 +603,103 @@ elif menu == "إدارة المنتجات ⚙️":
                 else:
                     st.error("فشل الاتصال بجوجل شيت")
 
-    # --- 8. المتجر 🛒 (النظام المتكامل: سلة + دفع + إجمالي) ---
-    elif menu == "المتجر 🛒":
-        st.header("🛒 متجر Healthy Water")
+# --- 8. المتجر 🛒 (النظام المتكامل: سلة + دفع + إجمالي) ---
+elif menu == "المتجر 🛒":
+    st.header("🛒 متجر Healthy Water")
             
-        # 1. تهيئة سلة التسوق في الذاكرة (Session State)
-        if 'cart' not in st.session_state:
-            st.session_state.cart = []
-        if 'view_cart' not in st.session_state:
-            st.session_state.view_cart = False
+    # 1. تهيئة سلة التسوق في الذاكرة (Session State)
+    if 'cart' not in st.session_state:
+        st.session_state.cart = []
+    if 'view_cart' not in st.session_state:
+        st.session_state.view_cart = False
 
-        # 2. أيقونة السلة في الأعلى
-        cart_count = sum(item['quantity'] for item in st.session_state.cart)
-        col_header, col_cart = st.columns([0.8, 0.2])
-        with col_cart:
-            if st.button(f"🛒 السلة ({cart_count})"):
-                st.session_state.view_cart = not st.session_state.view_cart
+    # 2. أيقونة السلة في الأعلى
+    cart_count = sum(item['quantity'] for item in st.session_state.cart)
+    col_header, col_cart = st.columns([0.8, 0.2])
+    with col_cart:
+        if st.button(f"🛒 السلة ({cart_count})"):
+            st.session_state.view_cart = not st.session_state.view_cart
             
-        # 3. عرض محتويات السلة إذا كانت مفتوحة
-        if st.session_state.view_cart:
-            st.subheader("🛍️ محتويات السلة")
-            if not st.session_state.cart:
-                st.info("السلة فارغة حالياً")
-            else:
-                total_cart = 0
-                for i, item in enumerate(st.session_state.cart):
-                    c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
-                    c1.write(item['Title'])
-                    c2.write(f"{item['Price']} ج.م")
-                    c3.write(f"الكمية: {item['quantity']}")
-                    if c4.button("❌", key=f"del_{i}"):
-                        st.session_state.cart.pop(i)
-                        st.rerun()
-                    total_cart += item['Price'] * item['quantity']
-                
-                st.divider()
-                st.markdown(f"### الإجمالي: {total_cart} ج.م")
-                if st.button("إتمام الطلب ✅"):
-                    st.success("تم استلام طلبك، سنتواصل معك قريباً!")
-                    st.session_state.cart = []
-                    st.session_state.view_cart = False
-                    st.rerun()
-            st.divider()
-
-        # 4. تحميل وعرض المنتجات
-        STORE_GID = "1168172935" 
-        df_store_data = load_data(STORE_GID)
-            
-        if df_store_data.empty:
-            st.warning("لا توجد منتجات معروضة حالياً.")
+    # 3. عرض محتويات السلة إذا كانت مفتوحة
+    if st.session_state.view_cart:
+        st.subheader("🛍️ محتويات السلة")
+        if not st.session_state.cart:
+            st.info("السلة فارغة حالياً")
         else:
-            # عرض الأقسام (Tabs)
-            t1, t2 = st.tabs(["💧 الأجهزة", "🛡️ الشمعات"])
+            total_cart = 0
+            for i, item in enumerate(st.session_state.cart):
+                c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+                c1.write(item['Title'])
+                c2.write(f"{item['Price']} ج.م")
+                c3.write(f"الكمية: {item['quantity']}")
+                if c4.button("❌", key=f"del_{i}"):
+                    st.session_state.cart.pop(i)
+                    st.rerun()
+                total_cart += item['Price'] * item['quantity']
                 
-            def show_products(filtered_df):
-                if filtered_df.empty:
-                    st.write("لا توجد منتجات في هذا القسم.")
-                    return
-                
-                # عرض المنتجات في شبكة (Grid) من عمودين
-                cols = st.columns(2)
-                for i, (_, row) in enumerate(filtered_df.iterrows()):
-                    with cols[i % 2]:
-                        with st.container(border=True):
-                            # معالجة الصور
-                            imgs = str(row.get('Images', '')).split("||")
-                            if imgs and "base64" in imgs[0]:
-                                st.image(imgs[0], use_container_width=True)
-                            else:
-                                st.info("لا توجد صورة")
-                                
-                            st.subheader(row.get('Title', 'منتج بدون اسم'))
-                            price = to_num(row.get('Price', 0))
-                            st.write(f"**السعر:** {price} ج.م")
-                            
-                            # أزرار الإضافة للسلة
-                            if st.button("➕ أضف للسلة", key=f"add_{row.get('row_index_internal', i)}"):
-                                found = False
-                                for item in st.session_state.cart:
-                                    if item['Title'] == row['Title']:
-                                        item['quantity'] += 1
-                                        found = True
-                                        break
-                                if not found:
-                                    st.session_state.cart.append({
-                                        'Title': row['Title'],
-                                        'Price': price,
-                                        'quantity': 1
-                                    })
-                                st.toast(f"تم إضافة {row['Title']} للسلة")
-                                st.rerun()
+            st.divider()
+            st.markdown(f"### الإجمالي: {total_cart} ج.م")
+            if st.button("إتمام الطلب ✅"):
+                st.success("تم استلام طلبك، سنتواصل معك قريباً!")
+                st.session_state.cart = []
+                st.session_state.view_cart = False
+                st.rerun()
+        st.divider()
 
-            with t1:
-                # فلترة المنتجات حسب تصنيف "أجهزة"
-                category_col = 'Category' if 'Category' in df_store_data.columns else df_store_data.columns[4]
-                show_products(df_store_data[df_store_data[category_col].astype(str).str.contains('أجهزة', na=False)])
+    # 4. تحميل وعرض المنتجات
+    STORE_GID = "1168172935" 
+    df_store_data = load_data(STORE_GID)
             
-            with t2:
-                # فلترة المنتجات حسب تصنيف "شمعات"
-                category_col = 'Category' if 'Category' in df_store_data.columns else df_store_data.columns[4]
-                show_products(df_store_data[df_store_data[category_col].astype(str).str.contains('شمعات', na=False)])
+    if df_store_data.empty:
+        st.warning("لا توجد منتجات معروضة حالياً.")
+    else:
+        # عرض الأقسام (Tabs)
+        t1, t2 = st.tabs(["💧 الأجهزة", "🛡️ الشمعات"])
+                
+        def show_products(filtered_df):
+            if filtered_df.empty:
+                st.write("لا توجد منتجات في هذا القسم.")
+                return
+                
+            # عرض المنتجات في شبكة (Grid) من عمودين
+            cols = st.columns(2)
+            for i, (_, row) in enumerate(filtered_df.iterrows()):
+                with cols[i % 2]:
+                    with st.container(border=True):
+                        # معالجة الصور
+                        imgs = str(row.get('Images', '')).split("||")
+                        if imgs and "base64" in imgs[0]:
+                            st.image(imgs[0], use_container_width=True)
+                        else:
+                            st.info("لا توجد صورة")
+                                
+                        st.subheader(row.get('Title', 'منتج بدون اسم'))
+                        price = to_num(row.get('Price', 0))
+                        st.write(f"**السعر:** {price} ج.م")
+                            
+                        # أزرار الإضافة للسلة
+                        if st.button("➕ أضف للسلة", key=f"add_{row.get('row_index_internal', i)}"):
+                            found = False
+                            for item in st.session_state.cart:
+                                if item['Title'] == row['Title']:
+                                    item['quantity'] += 1
+                                    found = True
+                                    break
+                            if not found:
+                                st.session_state.cart.append({
+                                    'Title': row['Title'],
+                                    'Price': price,
+                                    'quantity': 1
+                                })
+                            st.toast(f"تم إضافة {row['Title']} للسلة")
+                            st.rerun()
+
+        with t1:
+            # فلترة المنتجات حسب تصنيف "أجهزة"
+            category_col = 'Category' if 'Category' in df_store_data.columns else df_store_data.columns[4]
+            show_products(df_store_data[df_store_data[category_col].astype(str).str.contains('أجهزة', na=False)])
+            
+        with t2:
+            # فلترة المنتجات حسب تصنيف "شمعات"
+            category_col = 'Category' if 'Category' in df_store_data.columns else df_store_data.columns[4]
+            show_products(df_store_data[df_store_data[category_col].astype(str).str.contains('شمعات', na=False)])
