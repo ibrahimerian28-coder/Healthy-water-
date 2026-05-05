@@ -289,33 +289,33 @@ elif st.session_state.user_type == "admin":
 
     
 
-    elif menu == "إضافة عميل":
-        st.header("➕ إضافة عميل جديد")
-        with st.form("new_cust_form"):
-            # مدخلات البيانات
-            name = st.text_input("اسم العميل")
-            phone = st.text_input("رقم الهاتف")
-            area = st.text_input("المنطقة")
-            address = st.text_input("العنوان بالتفصيل")
-            install_date = st.date_input("تاريخ التركيب", datetime.now())
-            cycle = st.number_input("دورة الصيانة (بالشهور)", value=3)
+elif menu == "إضافة عميل":
+    st.header("➕ إضافة عميل جديد")
+     with st.form("new_cust_form"):
+        # مدخلات البيانات
+         name = st.text_input("اسم العميل")
+         phone = st.text_input("رقم الهاتف")
+         area = st.text_input("المنطقة")
+         address = st.text_input("العنوان بالتفصيل")
+         install_date = st.date_input("تاريخ التركيب", datetime.now())
+         cycle = st.number_input("دورة الصيانة (بالشهور)", value=3)
         
-            submit = st.form_submit_button("حفظ العميل")
+         submit = st.form_submit_button("حفظ العميل")
         
-            if submit:
-                if name and phone:
-                    # 1. تجهيز البيانات في قائمة (List) متوافقة مع أعمدة الشيت
-                    # الترتيب: الاسم، الموبايل، 4 خانات موبايل فارغة، العنوان، المنطقة، لوكيشن فارغ، التاريخ، الدورة، الحالة
-                    customer_data = [name, phone, "", "", "", "", address, area, "", str(install_date), cycle, "نشط"]
+         if submit:
+             if name and phone:
+                 # 1. تجهيز البيانات في قائمة (List) متوافقة مع أعمدة الشيت
+                 # الترتيب: الاسم، الموبايل، 4 خانات موبايل فارغة، العنوان، المنطقة، لوكيشن فارغ، التاريخ، الدورة، الحالة
+                 customer_data = [name, phone, "", "", "", "", address, area, "", str(install_date), cycle, "نشط"]
                 
-                    # 2. إرسال البيانات (تأكدنا هنا أن اسم المتغير هو customer_data)
-                    if execute_gsheet_action("append", "Customers", data=customer_data):
-                        st.success(f"تم إضافة العميل {name} بنجاح!")
-                        st.cache_data.clear() # لتحديث البيانات فوراً
-                    else:
-                        st.error("عذراً، فشل الاتصال بجوجل شيت. تأكد من رابط الـ Web App")
-                else:
-                    st.warning("يرجى ملء الاسم ورقم الهاتف على الأقل")
+                 # 2. إرسال البيانات (تأكدنا هنا أن اسم المتغير هو customer_data)
+                 if execute_gsheet_action("append", "Customers", data=customer_data):
+                     st.success(f"تم إضافة العميل {name} بنجاح!")
+                     st.cache_data.clear() # لتحديث البيانات فوراً
+                 else:
+                     st.error("عذراً، فشل الاتصال بجوجل شيت. تأكد من رابط الـ Web App")
+                 else:
+                     st.warning("يرجى ملء الاسم ورقم الهاتف على الأقل")
 
 
     elif menu == "بيانات العملاء":
