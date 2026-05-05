@@ -9,15 +9,15 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. الإعدادات والبيانات الأساسية (ثوابت النظام) ---
-ADMIN_PASSWORD = "123"  # يمكنك تغييرها حسب رغبتك
+# --- 1. الإعدادات والبيانات الأساسية (تحديث كلمة المرور هنا) ---
+# تم وضع كلمة المرور الخاصة بك مكان "123" لكي يفتح التطبيق
+ADMIN_PASSWORD = "HgM18082019$&)" 
 USER_PASSWORD = "456"
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 COMPANY_PHONE = "01286609535"
 
 # --- 2. تهيئة الجلسة (Session State) ---
-# هذا الجزء يمنع خطأ AttributeError و NameError
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'user_type' not in st.session_state:
@@ -27,19 +27,24 @@ if 'user_type' not in st.session_state:
 if not st.session_state.logged_in:
     st.set_page_config(page_title="Healthy Water - Login", layout="centered")
     st.title("🔐 تسجيل الدخول")
-    pwd = st.text_input("أدخل كلمة المرور", type="password")
+    
+    # حقل إدخال كلمة المرور
+    pwd = st.text_input("أدخل كلمة المرور الخاصة بك", type="password")
+    
     if st.button("دخول"):
         if pwd == ADMIN_PASSWORD:
             st.session_state.logged_in = True
             st.session_state.user_type = "admin"
+            st.success("تم تسجيل الدخول بنجاح")
             st.rerun()
         elif pwd == USER_PASSWORD:
             st.session_state.logged_in = True
             st.session_state.user_type = "user"
+            st.success("تم تسجيل الدخول بنجاح")
             st.rerun()
         else:
-            st.error("كلمة المرور غير صحيحة")
-    st.stop() # يمنع تنفيذ باقي الكود إذا لم يتم تسجيل الدخول
+            st.error("كلمة المرور غير صحيحة.. تأكد من الحروف الكبيرة والصغيرة والرموز")
+    st.stop() 
 
 # --- 4. الإعدادات المركزية بعد تسجيل الدخول ---
 st.set_page_config(page_title="Healthy Water Pro", layout="wide")
@@ -71,27 +76,25 @@ def load_data(gid):
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
         df['row_index_internal'] = range(2, len(df) + 2)
-        # تنظيف فوري لأي قيم None أو فارغة
         return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
     except: return pd.DataFrame()
 
-# --- 6. تحميل كافة الجداول (تأمين ضد NameError) ---
-df_c = load_data("0")             # العملاء
-df_m = load_data("2120582392")    # الصيانات
-df_inv = load_data("1767710106")  # المخزن
-df_exp = load_data("288947510")    # المصروفات
-df_store = load_data("1168172935") # المتجر
+# --- 6. تحميل كافة الجداول ---
+df_c = load_data("0")             
+df_m = load_data("2120582392")    
+df_inv = load_data("1767710106")  
+df_exp = load_data("288947510")    
+df_store = load_data("1168172935") 
 
-# معالجة تواريخ وأرقام شيت الصيانات فور التحميل
+# معالجة البيانات فور التحميل
 if not df_m.empty:
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
     df_m['amount_num'] = df_m['amount'].apply(to_num)
 
-# معالجة شيت المصروفات
 if not df_exp.empty:
     df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 
-# تأمين متغير البحث في الشريط الجانبي
+# شريط البحث الجانبي
 search = st.sidebar.text_input("بحث عن عميل:", "")
 
 # زر تسجيل الخروج
