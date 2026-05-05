@@ -8,23 +8,46 @@ import io
 import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
 
-# 2. الآن يمكنك استخدام الشرط الخاص بك دون مشاكل
-if st.session_state.user_type is None:
-    # كود تسجيل الدخول هنا
-    st.write("الرجاء تسجيل الدخول")
-
-# --- 1. الإعدادات المركزية ---
+# --- 1. الإعدادات والبيانات الأساسية (ثوابت النظام) ---
+ADMIN_PASSWORD = "123"  # يمكنك تغييرها حسب رغبتك
+USER_PASSWORD = "456"
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
 LOGO_PATH = "logo.png"
 COMPANY_PHONE = "01286609535"
 
-# --- 2. الدوال المساعدة (تنظيف البيانات والعربي) ---
+# --- 2. تهيئة الجلسة (Session State) ---
+# هذا الجزء يمنع خطأ AttributeError و NameError
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+
+# --- 3. نظام تسجيل الدخول ---
+if not st.session_state.logged_in:
+    st.set_page_config(page_title="Healthy Water - Login", layout="centered")
+    st.title("🔐 تسجيل الدخول")
+    pwd = st.text_input("أدخل كلمة المرور", type="password")
+    if st.button("دخول"):
+        if pwd == ADMIN_PASSWORD:
+            st.session_state.logged_in = True
+            st.session_state.user_type = "admin"
+            st.rerun()
+        elif pwd == USER_PASSWORD:
+            st.session_state.logged_in = True
+            st.session_state.user_type = "user"
+            st.rerun()
+        else:
+            st.error("كلمة المرور غير صحيحة")
+    st.stop() # يمنع تنفيذ باقي الكود إذا لم يتم تسجيل الدخول
+
+# --- 4. الإعدادات المركزية بعد تسجيل الدخول ---
+st.set_page_config(page_title="Healthy Water Pro", layout="wide")
+
+# --- 5. الدوال المساعدة (تنظيف البيانات والعربي) ---
 def format_ar(text):
-    if text is None or str(text).strip().lower() == "none" or str(text).strip() == "": 
-        return ""
+    if text is None or str(text).strip().lower() in ["none", "nan", "null", ""]: 
+        return "-"
     return get_display(reshape(str(text)))
 
 def to_num(val):
@@ -52,11 +75,11 @@ def load_data(gid):
         return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
     except: return pd.DataFrame()
 
-# --- 3. تحميل كافة الجداول (تأمين ضد NameError) ---
-df_c = load_data("0")            # العملاء
-df_m = load_data("2120582392")   # الصيانات
+# --- 6. تحميل كافة الجداول (تأمين ضد NameError) ---
+df_c = load_data("0")             # العملاء
+df_m = load_data("2120582392")    # الصيانات
 df_inv = load_data("1767710106")  # المخزن
-df_exp = load_data("288947510")   # المصروفات
+df_exp = load_data("288947510")    # المصروفات
 df_store = load_data("1168172935") # المتجر
 
 # معالجة تواريخ وأرقام شيت الصيانات فور التحميل
@@ -68,14 +91,16 @@ if not df_m.empty:
 if not df_exp.empty:
     df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 
-# تأمين متغير البحث
+# تأمين متغير البحث في الشريط الجانبي
 search = st.sidebar.text_input("بحث عن عميل:", "")
 
-# --- 1. دالة التنسيق (لإخفاء None ووضع شرطة) ---
-def format_ar(text):
-    if text is None or str(text).strip().lower() in ["none", "nan", "null", ""]: 
-        return "-"
-    return get_display(reshape(str(text)))
+# زر تسجيل الخروج
+if st.sidebar.button("🚪 تسجيل خروج"):
+    st.session_state.logged_in = False
+    st.session_state.user_type = None
+    st.rerun()
+
+# --- الآن الكود جاهز لإضافة باقي صفحات القائمة (Menu) تحت هذا السطر ---
 
 # --- 2. كلاس الـ PDF (لازم يكون قبل الدالة اللي بتستخدمه) ---
 class PDF_Report(FPDF):
