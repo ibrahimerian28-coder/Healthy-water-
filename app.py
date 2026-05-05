@@ -370,41 +370,41 @@ elif menu == "تسجيل صيانة":
                 else:
                     st.error("❌ فشل الاتصال بالسيرفر، تأكد من رابط الـ Web App")
 
-    elif menu == "المخزن 📦":
-        st.header("📦 إدارة المخزن")
-        total_inventory_value = 0 
+elif menu == "المخزن 📦":
+    st.header("📦 إدارة المخزن")
+    total_inventory_value = 0 
             
-        for i, r in df_inv.iterrows():
-            current_qty = to_num(r.get('quantity', 0))
-            current_min = to_num(r.get('min_limit', 0))
-            current_cost = to_num(r.get('cost_price', 0))
+    for i, r in df_inv.iterrows():
+        current_qty = to_num(r.get('quantity', 0))
+        current_min = to_num(r.get('min_limit', 0))
+        current_cost = to_num(r.get('cost_price', 0))
                 
-            item_total_value = current_qty * current_cost
-            total_inventory_value += item_total_value
+        item_total_value = current_qty * current_cost
+        total_inventory_value += item_total_value
                 
-            with st.expander(f"⚙️ {r['item_name']} - الرصيد الحالي: {current_qty}"):
-                with st.form(f"inv_edit_{i}"):
-                    c1, c2 = st.columns(2)
-                    u_qty = c1.number_input("الكمية المتوفرة", value=current_qty, key=f"qty_{i}")
-                    u_min = c2.number_input("حد الأمان (min_limit)", value=current_min, key=f"min_{i}")
-                    u_cost = c1.number_input("سعر التكلفة (cost_price)", value=current_cost, key=f"cost_{i}")
+        with st.expander(f"⚙️ {r['item_name']} - الرصيد الحالي: {current_qty}"):
+            with st.form(f"inv_edit_{i}"):
+                c1, c2 = st.columns(2)
+                u_qty = c1.number_input("الكمية المتوفرة", value=current_qty, key=f"qty_{i}")
+                u_min = c2.number_input("حد الأمان (min_limit)", value=current_min, key=f"min_{i}")
+                u_cost = c1.number_input("سعر التكلفة (cost_price)", value=current_cost, key=f"cost_{i}")
                         
-                    st.info(f"💰 إجمالي قيمة هذا الصنف في المخزن: {u_qty * u_cost} ج.م")
+                st.info(f"💰 إجمالي قيمة هذا الصنف في المخزن: {u_qty * u_cost} ج.م")
                         
-                    if st.form_submit_button("تحديث بيانات الصنف"):
-                        updated_data = [
-                            r['item_name'], # العمود A
-                            u_qty,          # العمود B
-                            u_min,          # العمود C
-                            u_cost          # العمود D
-                        ]
+                if st.form_submit_button("تحديث بيانات الصنف"):
+                    updated_data = [
+                        r['item_name'], # العمود A
+                        u_qty,          # العمود B
+                        u_min,          # العمود C
+                        u_cost          # العمود D
+                    ]
                             
-                        if execute_gsheet_action("update", "Inventory", updated_data, row_index=r['row_index_internal']):
-                            st.success(f"تم تحديث {r['item_name']} بنجاح!")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error("خطأ: تعذر الوصول للسيرفر لتحديث البيانات.")
+                    if execute_gsheet_action("update", "Inventory", updated_data, row_index=r['row_index_internal']):
+                        st.success(f"تم تحديث {r['item_name']} بنجاح!")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error("خطأ: تعذر الوصول للسيرفر لتحديث البيانات.")
 
         st.divider()
         st.metric(label="إجمالي رأس المال (قيمة المخزون الكلية)", value=f"{total_inventory_value} ج.م")
