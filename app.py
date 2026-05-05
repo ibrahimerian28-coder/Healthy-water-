@@ -12,7 +12,7 @@ from bidi.algorithm import get_display
 # --- 1. الإعدادات والبيانات الأساسية ---
 ADMIN_PASSWORD = "HgM18082019$&)" 
 USER_PASSWORD = "456"
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
+WEB_APP_URL = "https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/edit?usp=sharing"
 LOGO_PATH = "logo.png"
 COMPANY_PHONE = "01286609535"
 
@@ -52,7 +52,7 @@ def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
 
 @st.cache_data(ttl=1)
 def load_data(gid):
-    url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
+    url = f"https://docs.google.com/spreadsheets/d/1RGDGJaP_lo2Fp2beLqAQvLulqMk2WDJKqLv2g34-ycc/edit?usp=sharing"
     try:
         df = pd.read_csv(url)
         df.columns = [str(c).strip() for c in df.columns]
@@ -129,7 +129,7 @@ df_c = load_data("0")
 df_m = load_data("2120582392")     
 df_inv = load_data("1767710106")   
 df_exp = load_data("288947510")     
-df_store = load_data("1168172935") 
+df_store = load_data("1129472026") 
 
 if not df_m.empty:
     df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
