@@ -9,8 +9,7 @@ import os
 from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
-# --- 1. الإعدادات والبيانات الأساسية (تحديث كلمة المرور هنا) ---
-# تم وضع كلمة المرور الخاصة بك مكان "123" لكي يفتح التطبيق
+# --- 1. الإعدادات والبيانات الأساسية ---
 ADMIN_PASSWORD = "HgM18082019$&)" 
 USER_PASSWORD = "456"
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
@@ -23,33 +22,7 @@ if 'logged_in' not in st.session_state:
 if 'user_type' not in st.session_state:
     st.session_state.user_type = None
 
-# --- 3. نظام تسجيل الدخول ---
-if not st.session_state.logged_in:
-    st.set_page_config(page_title="Healthy Water - Login", layout="centered")
-    st.title("🔐 تسجيل الدخول")
-    
-    # حقل إدخال كلمة المرور
-    pwd = st.text_input("أدخل كلمة المرور الخاصة بك", type="password")
-    
-    if st.button("دخول"):
-        if pwd == ADMIN_PASSWORD:
-            st.session_state.logged_in = True
-            st.session_state.user_type = "admin"
-            st.success("تم تسجيل الدخول بنجاح")
-            st.rerun()
-        elif pwd == USER_PASSWORD:
-            st.session_state.logged_in = True
-            st.session_state.user_type = "user"
-            st.success("تم تسجيل الدخول بنجاح")
-            st.rerun()
-        else:
-            st.error("كلمة المرور غير صحيحة.. تأكد من الحروف الكبيرة والصغيرة والرموز")
-    st.stop() 
-
-# --- 4. الإعدادات المركزية بعد تسجيل الدخول ---
-st.set_page_config(page_title="Healthy Water Pro", layout="wide")
-
-# --- 5. الدوال المساعدة (تنظيف البيانات والعربي) ---
+# --- 3. الدوال المساعدة المركزية ---
 def format_ar(text):
     if text is None or str(text).strip().lower() in ["none", "nan", "null", ""]: 
         return "-"
@@ -69,6 +42,14 @@ def parse_dt(val):
         except: continue
     return pd.to_datetime(val, errors='coerce')
 
+def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
+    payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
+    try:
+        response = requests.post(WEB_APP_URL, json=payload, timeout=10)
+        return response.status_code == 200
+    except:
+        return False
+
 @st.cache_data(ttl=1)
 def load_data(gid):
     url = f"https://docs.google.com/spreadsheets/d/1Dpy1_KVLN_Ejch7LSjuewLvdmSM270skJN-2bBkcIiI/export?format=csv&gid={gid}"
@@ -79,33 +60,7 @@ def load_data(gid):
         return df.replace({pd.NA: "", None: "", "None": "", "none": ""})
     except: return pd.DataFrame()
 
-# --- 6. تحميل كافة الجداول ---
-df_c = load_data("0")             
-df_m = load_data("2120582392")    
-df_inv = load_data("1767710106")  
-df_exp = load_data("288947510")    
-df_store = load_data("1168172935") 
-
-# معالجة البيانات فور التحميل
-if not df_m.empty:
-    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
-    df_m['amount_num'] = df_m['amount'].apply(to_num)
-
-if not df_exp.empty:
-    df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
-
-# شريط البحث الجانبي
-search = st.sidebar.text_input("بحث عن عميل:", "")
-
-# زر تسجيل الخروج
-if st.sidebar.button("🚪 تسجيل خروج"):
-    st.session_state.logged_in = False
-    st.session_state.user_type = None
-    st.rerun()
-
-# --- الآن الكود جاهز لإضافة باقي صفحات القائمة (Menu) تحت هذا السطر ---
-
-# --- 2. كلاس الـ PDF (لازم يكون قبل الدالة اللي بتستخدمه) ---
+# --- 4. كلاس الـ PDF وتوليد التقارير ---
 class PDF_Report(FPDF):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -119,33 +74,26 @@ class PDF_Report(FPDF):
 
     def footer(self):
         self.set_y(-15)
-        # خط الفوتر كبير وواضح (16)
         self.set_font(self.font_ar, size=16) 
         self.cell(0, 10, format_ar(f"Healthy Water | {COMPANY_PHONE}"), align='C')
 
-# --- 3. دالة توليد الـ PDF (بتستخدم الكلاس اللي فوقها) ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
     f = pdf.font_ar
-    
     try:
         if os.path.exists(LOGO_PATH):
             pdf.image(LOGO_PATH, x=10, y=8, w=30)
     except: pass
 
-    # العنوان الرئيسي
     pdf.set_y(35)
     pdf.set_font(f, size=20)
     pdf.cell(0, 10, format_ar(f"سجل صيانات العميل: {cust_row.get('name', '')}"), ln=1, align='C')
-    
-    # بيانات العميل
     pdf.set_font(f, size=14)
     pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row.get('phone', '')}"), ln=1, align='C')
     pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), ln=1, align='C')
     pdf.ln(10)
 
-    # عناوين الجدول
     cols = ['التاريخ', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'أخرى', 'المبلغ', 'ملاحظات']
     widths = [25, 12, 12, 12, 12, 12, 12, 12, 30, 20, 100]
     
@@ -155,167 +103,121 @@ def generate_customer_pdf(cust_row, history_df):
         pdf.cell(widths[i], 10, format_ar(col), border=1, align='C', fill=True)
     pdf.ln()
 
-    # كتابة كل سجلات الصيانة
     pdf.set_font(f, size=10)
     if not history_df.empty:
-        # ترتيب تنازلي (الأحدث فوق)
         history_sorted = history_df.copy()
         if 'v_date_dt' in history_sorted.columns:
             history_sorted = history_sorted.sort_values('v_date_dt', ascending=False)
         
         for i, (idx, r) in enumerate(history_sorted.iterrows()):
-            if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
-            else: pdf.set_fill_color(245, 245, 245)
-            
-            # التاريخ
+            pdf.set_fill_color(255, 255, 255) if i % 2 == 0 else pdf.set_fill_color(245, 245, 245)
             v_date = str(r.get('visit_date', ''))
             pdf.cell(widths[0], 10, v_date if v_date.strip().lower() not in ["none", ""] else "-", border=1, align='C', fill=True)
-            
-            # الشمعات (استبدال X بكلمة "تم" أو "-")
             for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
                 val = str(r.get(p, '')).lower()
                 mark = format_ar("تم") if val in ['true', '1', '✅', 'yes', 'نعم'] else "-"
                 pdf.cell(12, 10, mark, border=1, align='C', fill=True)
-            
-            # الخانات النصية
             pdf.cell(widths[8], 10, format_ar(r.get('other', '')), border=1, align='C', fill=True)
-            
             amt = str(r.get('amount', '0'))
             pdf.cell(widths[9], 10, amt if amt not in ["0", "None", "nan"] else "-", border=1, align='C', fill=True)
-            
-            # الملاحظات
             pdf.cell(widths[10], 10, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
             pdf.ln()
-
     return bytes(pdf.output())
 
-# --- 5. تسجيل الدخول ---
+# --- 5. تحميل كافة الجداول ---
+df_c = load_data("0")             
+df_m = load_data("2120582392")    
+df_inv = load_data("1767710106")  
+df_exp = load_data("288947510")    
+df_store = load_data("1168172935") 
 
-if st.session_state.user_type is None:
+if not df_m.empty:
+    df_m['v_date_dt'] = df_m['visit_date'].apply(parse_dt)
+    df_m['amount_num'] = df_m['amount'].apply(to_num)
+if not df_exp.empty:
+    df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 
+# --- 6. نظام تسجيل الدخول ---
+if not st.session_state.logged_in:
+    st.set_page_config(page_title="Healthy Water - Login", layout="centered")
     st.title("🚰 Healthy Water System")
-
     t1, t2 = st.tabs(["🔒 الأدمن", "👤 العميل"])
-
+    
     with t1:
-
-        pwd = st.text_input("كلمة السر", type="password")
-
+        pwd_input = st.text_input("كلمة السر", type="password")
         if st.button("دخول الأدمن"):
-
-            if pwd == ADMIN_PASSWORD:
-
-                st.session_state.user_type = "admin"; st.rerun()
-
-    with t2:
-
-        phone_input = st.text_input("رقم الهاتف المسجل")
-
-        if st.button("دخول العميل"):
-
-            if phone_input.strip() == "":
-
-                st.warning("يرجى إدخال رقم الهاتف")
-
+            if pwd_input == ADMIN_PASSWORD:
+                st.session_state.logged_in = True
+                st.session_state.user_type = "admin"
+                st.success("تم تسجيل الدخول بنجاح")
+                st.rerun()
             else:
-
+                st.error("كلمة المرور غير صحيحة")
+    
+    with t2:
+        phone_input = st.text_input("رقم الهاتف المسجل")
+        if st.button("دخول العميل"):
+            if phone_input.strip() != "":
                 clean_phone = str(phone_input).strip()
-
                 available_phone_cols = [col for col in df_c.columns if 'phone' in col.lower()]
-
-                
-
-                if not available_phone_cols:
-
-                    st.error("خطأ: لم يتم العثور على أعمدة الهاتف في قاعدة البيانات.")
-
-                else:
-
-                    mask = df_c[available_phone_cols].astype(str).apply(
-
-                        lambda x: x.str.contains(clean_phone, na=False)
-
-                    ).any(axis=1)
-
-                    
-
+                if available_phone_cols:
+                    mask = df_c[available_phone_cols].astype(str).apply(lambda x: x.str.contains(clean_phone, na=False)).any(axis=1)
                     match = df_c[mask]
-
-                    
-
                     if not match.empty:
-
+                        st.session_state.logged_in = True
                         st.session_state.user_type = "customer"
-
                         st.session_state.customer_data = match
-
-                        st.success("تم تسجيل الدخول بنجاح")
-
                         st.rerun()
-
                     else:
-
                         st.error("عذراً، هذا الرقم غير مسجل لدينا.")
+    st.stop()
 
+# --- 7. واجهة التطبيق الرئيسية (بعد تسجيل الدخول) ---
+st.set_page_config(page_title="Healthy Water Pro", layout="wide")
 
+# زر تسجيل الخروج في الشريط الجانبي
+if st.sidebar.button("🚪 تسجيل خروج"):
+    st.session_state.logged_in = False
+    st.session_state.user_type = None
+    st.rerun()
 
-# --- 6. واجهة الأدمن ---
-
-elif st.session_state.user_type == "admin":
-
-    st.sidebar.image(LOGO_PATH, use_column_width=True)
-
-    if 'menu_choice' not in st.session_state: st.session_state.menu_choice = "بيانات العملاء"
-
-    
-
+if st.session_state.user_type == "admin":
+    st.sidebar.image(LOGO_PATH, use_container_width=True)
     admin_options = ["بيانات العملاء", "إضافة عميل جديد", "جدول المواعيد 📅", "تسجيل صيانة", "المخزن 📦", "الاحتياجات 🚨", "المصروفات", "الأرباح 📈", "المتجر 🛒", "إدارة المنتجات ⚙️", "اطلب صيانة فوراً ⚙️"]
-
-    if st.session_state.menu_choice not in admin_options:
-
-        st.session_state.menu_choice = "بيانات العملاء"
-
-
-
-    menu = st.sidebar.radio(
-
-        "القائمة", 
-
-        admin_options,
-
-        index=admin_options.index(st.session_state.menu_choice)
-
-    ) 
-
+    menu = st.sidebar.radio("القائمة", admin_options)
     
+    if menu == "بيانات العملاء":
+        st.header("📋 سجل العملاء")
+        search = st.text_input("بحث عن عميل بالاسم أو الهاتف:")
+        # أضف كود عرض العملاء هنا
 
-   elif menu == "إضافة عميل":
-       st.header("➕ إضافة عميل جديد")
-       with st.form("new_cust_form"):
-           # مدخلات البيانات
-           name = st.text_input("اسم العميل")
-           phone = st.text_input("رقم الهاتف")
-           area = st.text_input("المنطقة")
-           address = st.text_input("العنوان بالتفصيل")
-           install_date = st.date_input("تاريخ التركيب", datetime.now())
-           cycle = st.number_input("دورة الصيانة (بالشهور)", value=3)
-        
-           submit = st.form_submit_button("حفظ العميل")
-        
-           if submit:
-               if name and phone:
-                   # 1. تجهيز البيانات في قائمة (List) متوافقة مع أعمدة الشيت
-                   # الترتيب: الاسم، الموبايل، 4 خانات موبايل فارغة، العنوان، المنطقة، لوكيشن فارغ، التاريخ، الدورة، الحالة
-                   customer_data = [name, phone, "", "", "", "", address, area, "", str(install_date), cycle, "نشط"]
-                
-                   # 2. إرسال البيانات (تأكدنا هنا أن اسم المتغير هو customer_data)
-                   if execute_gsheet_action("append", "Customers", data=customer_data):
-                       st.success(f"تم إضافة العميل {name} بنجاح!")
-                       st.cache_data.clear() # لتحديث البيانات فوراً
-                   else:
-                       st.error("عذراً، فشل الاتصال بجوجل شيت. تأكد من رابط الـ Web App")
-               else:
-                   st.warning("يرجى ملء الاسم ورقم الهاتف على الأقل")
+    elif menu == "إضافة عميل جديد":
+        st.header("➕ إضافة عميل جديد")
+        with st.form("new_cust_form"):
+            name = st.text_input("اسم العميل")
+            phone = st.text_input("رقم الهاتف")
+            area = st.text_input("المنطقة")
+            address = st.text_input("العنوان بالتفصيل")
+            install_date = st.date_input("تاريخ التركيب", datetime.now())
+            cycle = st.number_input("دورة الصيانة (بالشهور)", value=3)
+            submit = st.form_submit_button("حفظ العميل")
+            if submit:
+                if name and phone:
+                    customer_data = [name, phone, "", "", "", "", address, area, "", str(install_date), cycle, "نشط"]
+                    if execute_gsheet_action("append", "Customers", data=customer_data):
+                        st.success(f"تم إضافة العميل {name} بنجاح!")
+                        st.cache_data.clear()
+                    else:
+                        st.error("فشل الاتصال بجوجل شيت")
+                else:
+                    st.warning("يرجى ملء الاسم ورقم الهاتف")
+
+    # يمكن إضافة باقي الـ elif لكل خيار في المنيو هنا بنفس النمط
+
+elif st.session_state.user_type == "customer":
+    st.header("👋 أهلاً بك")
+    st.write("هنا تظهر بياناتك وصياناتك القادمة")
+    # أضف كود واجهة العميل هنا
 
 
     elif menu == "بيانات العملاء":
