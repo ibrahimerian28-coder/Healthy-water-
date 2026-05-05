@@ -92,61 +92,78 @@ class PDF_Report(FPDF):
         self.line(10, self.get_y(), 287, self.get_y())
         self.cell(0, 10, footer_text, 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
 
+# --- 1. تحديث دالة التنسيق لتضع "-" مكان الفراغ أو None ---
+def format_ar(text):
+    # فحص صارم للقيم الفارغة أو None
+    if text is None or str(text).strip().lower() in ["none", "nan", "null", ""]: 
+        return "-"
+    return get_display(reshape(str(text)))
+
+# --- 2. دالة توليد الـ PDF المعدلة بالكامل ---
 def generate_customer_pdf(cust_row, history_df):
     pdf = PDF_Report(orientation='L', unit='mm', format='A4')
     pdf.add_page()
+    f = pdf.font_ar
     
-    font_path = os.path.join(os.getcwd(), "Arial.ttf")
-    has_arabic = False
-    if os.path.exists(font_path):
-        try:
-            pdf.add_font('ArabicFont', '', font_path)
-            has_arabic = True
-        except: pass
-
-    def format_ar(text):
-        if not text or str(text).strip() == "": return ""
-        if not has_arabic: return "".join([c for c in str(text) if ord(c) < 128])
-        return get_display(reshape(str(text)))
-
+    # شعار الشركة
     try:
-        pdf.image(LOGO_PATH, x=197, y=10, w=90) 
+        if os.path.exists(LOGO_PATH):
+            pdf.image(LOGO_PATH, x=10, y=8, w=30)
     except: pass
 
-    pdf.set_xy(10, 15) 
-    if has_arabic: pdf.set_font('ArabicFont', '', 24)
-    else: pdf.set_font('Arial', 'B', 22)
-    pdf.cell(150, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
+    # بيانات العميل الأساسية
+    pdf.set_y(35)
+    pdf.set_font(f, size=20)
+    pdf.cell(0, 10, format_ar(f"سجل صيانات العميل: {cust_row.get('name', '')}"), ln=1, align='C')
     
-    if has_arabic: pdf.set_font('ArabicFont', '', 14)
-    else: pdf.set_font('Arial', '', 12)
-    pdf.set_x(10)
-    pdf.cell(150, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
-    
-    pdf.set_y(60) 
+    pdf.set_font(f, size=14)
+    pdf.cell(0, 8, format_ar(f"رقم الهاتف: {cust_row.get('phone', '')}"), ln=1, align='C')
+    pdf.cell(0, 8, format_ar(f"العنوان: {cust_row.get('adress', '')}"), ln=1, align='C')
+    pdf.ln(10)
 
-    cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
-    widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
+    # عناوين الجدول
+    cols = ['التاريخ', 'P1', 'P2', 'P3', 'Mem', 'Post', 'Calc', 'Infra', 'أخرى', 'المبلغ', 'ملاحظات']
+    widths = [25, 12, 12, 12, 12, 12, 12, 12, 30, 20, 100]
     
-    pdf.set_fill_color(173, 216, 230) 
-    if has_arabic: pdf.set_font('ArabicFont', '', 11)
+    pdf.set_fill_color(200, 220, 255)
+    pdf.set_font(f, size=11)
     for i, col in enumerate(cols):
-        pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
+        pdf.cell(widths[i], 10, format_ar(col), border=1, align='C', fill=True)
     pdf.ln()
 
-    if has_arabic: pdf.set_font('ArabicFont', '', 10)
-    fill = False
-    for _, r in history_df.iterrows():
-        pdf.set_fill_color(245, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', fill)
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', fill)
-        other_val = str(r.get('other', ''))
-        pdf.cell(widths[2], 8, format_ar(other_val), 1, 0, 'C', fill)
-        for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
-            val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
-            pdf.cell(15, 8, val, 1, 0, 'C', fill)
-        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', fill)
-        fill = not fill 
+    # كتابة الصيانات
+    pdf.set_font(f, size=10)
+    
+    if not history_df.empty:
+        # الترتيب التنازلي (الأحدث أولاً)
+        history_sorted = history_df.copy()
+        if 'v_date_dt' in history_sorted.columns:
+            history_sorted = history_sorted.sort_values('v_date_dt', ascending=False)
+        
+        for i, (idx, r) in enumerate(history_sorted.iterrows()):
+            # تبديل لون الصفوف
+            if i % 2 == 0: pdf.set_fill_color(255, 255, 255)
+            else: pdf.set_fill_color(245, 245, 245)
+            
+            # التاريخ (إذا كان فارغاً نضع شرطة)
+            visit_date = str(r.get('visit_date', ''))
+            pdf.cell(widths[0], 10, visit_date if visit_date.strip().lower() not in ["none", ""] else "-", border=1, align='C', fill=True)
+            
+            # الشمعات (استبدال X بكلمة "تم" أو "-" لو لم يتم التغيير)
+            for p in ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']:
+                val = str(r.get(p, '')).lower()
+                mark = format_ar("تم") if val in ['true', '1', '✅', 'yes', 'نعم'] else "-"
+                pdf.cell(12, 10, mark, border=1, align='C', fill=True)
+            
+            # الخانات النصية والمبلغ
+            pdf.cell(widths[8], 10, format_ar(r.get('other', '')), border=1, align='C', fill=True)
+            
+            amount = str(r.get('amount', '0'))
+            pdf.cell(widths[9], 10, amount if amount not in ["0", "None", "nan"] else "-", border=1, align='C', fill=True)
+            
+            # الملاحظات
+            pdf.cell(widths[10], 10, format_ar(r.get('notes', '')), border=1, align='R', fill=True)
+            pdf.ln()
 
     return bytes(pdf.output())
 
