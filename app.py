@@ -265,60 +265,60 @@ elif menu == "بيانات العملاء":
                         for ph in phones:
                             st.markdown(f"<b>📞 {ph}</b> <a href='tel:{ph}'>اتصال</a> | <a href='https://wa.me/2{ph}'>واتساب</a>", unsafe_allow_html=True)
 
-    elif menu == "جدول المواعيد 📅":
-        st.header("📅 جدول مواعيد الصيانة")
-        today = datetime.now().date()
-        days_to_show = []
-        curr = today
+elif menu == "جدول المواعيد 📅":
+    st.header("📅 جدول مواعيد الصيانة")
+    today = datetime.now().date()
+    days_to_show = []
+    curr = today
                 
-        while len(days_to_show) < 7:
-            if curr.weekday() != 4: # استثناء يوم الجمعة
-                days_to_show.append(curr)
-            curr += timedelta(days=1)
+    while len(days_to_show) < 7:
+        if curr.weekday() != 4: # استثناء يوم الجمعة
+            days_to_show.append(curr)
+        curr += timedelta(days=1)
                     
-        for d in days_to_show:
-            st.subheader(f"📆 {d.strftime('%A, %Y-%m-%d')}")
+    for d in days_to_show:
+        st.subheader(f"📆 {d.strftime('%A, %Y-%m-%d')}")
             
-            # فلترة العملاء النشطين وتوقع مواعيدهم
-            for _, cust in df_c[df_c['status'] == "نشط"].iterrows():
-                last_m_all = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt')
+        # فلترة العملاء النشطين وتوقع مواعيدهم
+        for _, cust in df_c[df_c['status'] == "نشط"].iterrows():
+            last_m_all = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt')
                         
-                if not last_m_all.empty:
-                    last_m = last_m_all.iloc[-1]
-                    spec_date = parse_dt(last_m.get('special_date', ""))
-                    next_v = spec_date.date() if spec_date else (last_m['v_date_dt'] + timedelta(days=to_num(cust['cycle'])*30)).date()
+            if not last_m_all.empty:
+                last_m = last_m_all.iloc[-1]
+                spec_date = parse_dt(last_m.get('special_date', ""))
+                next_v = spec_date.date() if spec_date else (last_m['v_date_dt'] + timedelta(days=to_num(cust['cycle'])*30)).date()
                             
-                    if next_v == d or (next_v < today and d == days_to_show[0]):
-                        with st.expander(f"👤 {cust['name']} | 📍 {cust['area']} | 📞 {cust['phone']}"):
-                            c1, c2 = st.columns(2)
-                            c1.write(f"🏠 **العنوان:** {cust.get('adress', 'غير مسجل')}")
-                            c1.write(f"📅 **تاريخ التركيب:** {cust.get('install_date', 'غير مسجل')}")
+                if next_v == d or (next_v < today and d == days_to_show[0]):
+                    with st.expander(f"👤 {cust['name']} | 📍 {cust['area']} | 📞 {cust['phone']}"):
+                        c1, c2 = st.columns(2)
+                        c1.write(f"🏠 **العنوان:** {cust.get('adress', 'غير مسجل')}")
+                        c1.write(f"📅 **تاريخ التركيب:** {cust.get('install_date', 'غير مسجل')}")
                                     
-                            cust_hist = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt', ascending=False)
-                            if not cust_hist.empty:
-                                st.write("🛠️ **سجل الصيانات:**")
-                                display_hist = cust_hist.copy()
-                                check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
+                        cust_hist = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt', ascending=False)
+                        if not cust_hist.empty:
+                            st.write("🛠️ **سجل الصيانات:**")
+                            display_hist = cust_hist.copy()
+                            check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
                                         
-                                for col in check_cols:
-                                    if col in display_hist.columns:
-                                        display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
+                            for col in check_cols:
+                                if col in display_hist.columns:
+                                    display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
                                         
-                                show_cols = ['visit_date'] + [c for c in check_cols if c in display_hist.columns] + ['amount', 'notes']
-                                st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
+                            show_cols = ['visit_date'] + [c for c in check_cols if c in display_hist.columns] + ['amount', 'notes']
+                            st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
                                         
-                                if st.button("📄 تحميل PDF", key=f"pdf_sch_{cust['row_index_internal']}_{d}"):
-                                    pdf_data = generate_customer_pdf(cust, cust_hist)
-                                    st.download_button(label="بدء التحميل", data=pdf_data, file_name=f"{cust['name']}.pdf", mime="application/pdf", key=f"btn_dl_{cust['row_index_internal']}_{d}")
+                            if st.button("📄 تحميل PDF", key=f"pdf_sch_{cust['row_index_internal']}_{d}"):
+                                pdf_data = generate_customer_pdf(cust, cust_hist)
+                                st.download_button(label="بدء التحميل", data=pdf_data, file_name=f"{cust['name']}.pdf", mime="application/pdf", key=f"btn_dl_{cust['row_index_internal']}_{d}")
                                     
-                            phones = [cust.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(cust.get(p, '')).strip() != ""]
-                            for ph in phones:
-                                st.markdown(f"<b>📞 {ph}</b> <a href='tel:{ph}'>اتصال</a> | <a href='https://wa.me/2{ph}'>واتساب</a>", unsafe_allow_html=True)
+                        phones = [cust.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(cust.get(p, '')).strip() != ""]
+                        for ph in phones:
+                            st.markdown(f"<b>📞 {ph}</b> <a href='tel:{ph}'>اتصال</a> | <a href='https://wa.me/2{ph}'>واتساب</a>", unsafe_allow_html=True)
                                     
-                            if st.button("🔧 تسجيل صيانة الآن", key=f"go_reg_{cust['row_index_internal']}_{d}"):
-                                st.session_state.target_customer = cust['name']
-                                st.session_state.menu_choice = "تسجيل صيانة"
-                                st.rerun()
+                        if st.button("🔧 تسجيل صيانة الآن", key=f"go_reg_{cust['row_index_internal']}_{d}"):
+                            st.session_state.target_customer = cust['name']
+                            st.session_state.menu_choice = "تسجيل صيانة"
+                            st.rerun()
 
 
 
