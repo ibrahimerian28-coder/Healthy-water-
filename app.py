@@ -318,25 +318,25 @@ elif st.session_state.user_type == "admin":
 
                             # 2. منطق التعديل الشامل (يسمح بتعديل كل شيء)
                             if st.session_state.get(f"log_edit_mode_{log_id}", False):
-                                with st.form(key=f"form_log_edit_{log_id}"):
-                                    st.info(f"تعديل بيانات زيارة يوم {log_r['visit_date']}")
+                            with st.form(key=f"form_log_edit_{log_id}"):
+                                st.info(f"تعديل بيانات زيارة يوم {log_r['visit_date']}")
         
-                                    # ... هنا توضع حقول الإدخال (التاريخ، المبلغ، الشمعات) التي أضفناها سابقاً ...
+                                # ... هنا توضع حقول الإدخال (التاريخ، المبلغ، الشمعات) التي أضفناها سابقاً ...
         
-                                    if st.form_submit_button("حفظ التعديلات الشاملة"):
-                                        # تجميع البيانات
-                                        updated_log = [
-                                            r['phone'], u_date, 
-                                            "✅" if u_p1 else "❌", "✅" if u_p2 else "❌", "✅" if u_p3 else "❌", 
-                                            "✅" if u_mem else "❌", "✅" if u_post else "❌", "✅" if u_calc else "❌", 
-                                            "✅" if u_infra else "❌", u_amount, u_notes
-                                        ]
+                                if st.form_submit_button("حفظ التعديلات الشاملة"):
+                                    # تجميع البيانات
+                                    updated_log = [
+                                        r['phone'], u_date, 
+                                        "✅" if u_p1 else "❌", "✅" if u_p2 else "❌", "✅" if u_p3 else "❌", 
+                                        "✅" if u_mem else "❌", "✅" if u_post else "❌", "✅" if u_calc else "❌", 
+                                        "✅" if u_infra else "❌", u_amount, u_notes
+                                    ]
             
-                                        # قمنا بتغيير "Logs" إلى "Maintenance" هنا أيضاً
-                                        if update_item("Maintenance", log_id, updated_log):
-                                            st.success("تم تحديث كافة بيانات الزيارة بنجاح!")
-                                            st.session_state[f"log_edit_mode_{log_id}"] = False
-                                            st.rerun()
+                                    # قمنا بتغيير "Logs" إلى "Maintenance" هنا أيضاً
+                                    if update_item("Maintenance", log_id, updated_log):
+                                        st.success("تم تحديث كافة بيانات الزيارة بنجاح!")
+                                        st.session_state[f"log_edit_mode_{log_id}"] = False
+                                        st.rerun()
                                             
                                 if st.button("❌ إغلاق النافذة", key=f"close_log_edit_{log_id}"):
                                     st.session_state[f"log_edit_mode_{log_id}"] = False
