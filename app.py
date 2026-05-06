@@ -282,19 +282,19 @@ elif st.session_state.user_type == "admin":
                          else:
                              st.info("ℹ️ لا يوجد تاريخ زيارة مسجل لحساب الموعد القادم.")
                         
-                        st.write("🛠️ **سجل الصيانات:**")
-                        display_hist = cust_hist.copy()
-                        check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
-                        for col in check_cols:
-                            if col in display_hist.columns:
-                                display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
+        st.write("🛠️ **سجل الصيانات:**")
+        display_hist = cust_hist.copy()
+        check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
+        for col in check_cols:
+            if col in display_hist.columns:
+                display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
                         
-                        show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
-                        st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
+        show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
+        st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
                         
-                        if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
-                            pdf_data = generate_customer_pdf(r, cust_hist)
-                            st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
+        if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
+            pdf_data = generate_customer_pdf(r, cust_hist)
+            st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
                     
                     phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(r.get(p, '')).strip() != ""]
                     for ph in phones:
