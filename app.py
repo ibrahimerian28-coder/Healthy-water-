@@ -336,8 +336,7 @@ elif st.session_state.user_type == "admin":
                                     r.get('phone_3',''), r.get('phone_4',''), u_address, 
                                     u_area, u_loc, r['install_date'], u_cycle, r['status']
                                 ]
-                                if update_item("Customers", r['row_index_internal'], updated_data):
-                                    st.success("تم التحديث بنجاح!"); st.rerun()
+                                
                             
                             # نهاية الـ form هنا
                             if st.form_submit_button("حفظ التعديلات"):
