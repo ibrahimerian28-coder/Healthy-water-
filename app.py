@@ -319,7 +319,17 @@ elif st.session_state.user_type == "admin":
                             u_loc = st.text_input("اللوكيشن", value=r.get('location_url', ''))
                             u_cycle = st.number_input("الدورة", value=to_num(r['cycle']))
                             
-                            if st.form_submit_button("حفظ التعديلات"):
+                            # أضفنا key هنا ليتم تمييز زر كل عميل عن الآخر
+                            if st.form_submit_button("حفظ التعديلات", key=f"save_edit_{r['row_index_internal']}"):
+                                updated_data = [
+                                    u_name, u_phone, r.get('phone_1',''), r.get('phone_2',''), 
+                                    r.get('phone_3',''), r.get('phone_4',''), u_address, 
+                                    u_area, u_loc, r['install_date'], u_cycle, r['status']
+                                ]
+                                if update_item("Customers", r['row_index_internal'], updated_data):
+                                    st.success("تم التحديث بنجاح!")
+                                    st.session_state[f"edit_mode_{r['row_index_internal']}"] = False
+                                    st.rerun()
                                 # تجميع الصف الجديد (يجب أن يطابق ترتيب أعمدة الشيت عندك بدقة)
                                 updated_data = [
                                     u_name, u_phone, r.get('phone_1',''), r.get('phone_2',''), 
