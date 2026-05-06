@@ -255,7 +255,31 @@ elif st.session_state.user_type == "admin":
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
                     
-                    cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
+                    # --- تأمين معالجة بيانات العميل ومنع KeyError ---
+if not df_m.empty and 'name' in df_m.columns:
+    # 1. تصفية صيانات العميل الحالي
+    cust_hist = df_m[df_m['name'] == r['name']].copy()
+    
+    if not cust_hist.empty:
+        # 2. التأكد من وجود عمود الترتيب البرمجي (v_date_dt)
+        if 'v_date_dt' not in cust_hist.columns:
+            # محاولة إنشاء العمود فوراً إذا سقط أثناء تحميل البيانات الجديدة
+            cust_hist['v_date_dt'] = pd.to_datetime(cust_hist['visit_date'], errors='coerce')
+        
+        # 3. ملء أي تواريخ فارغة (بسبب الإدخالات الجديدة) لتجنب فشل الترتيب
+        cust_hist['v_date_dt'] = cust_hist['v_date_dt'].fillna(pd.Timestamp('1900-01-01'))
+        
+        # 4. الترتيب النهائي من الأحدث للأقدم
+        cust_hist = cust_hist.sort_values('v_date_dt', ascending=False)
+    else:
+        # إذا لم يجد العميل في شيت الصيانات، ينشئ جدول فارغ بنفس الأعمدة
+        cust_hist = pd.DataFrame(columns=df_m.columns)
+else:
+    cust_hist = pd.DataFrame()
+
+# السطر التالي المفترض وجوده في كودك بعد الفلترة مباشرة:
+pdf_data = generate_customer_pdf(r, cust_hist)
+
                     
                     if not cust_hist.empty:
                         last_v = cust_hist.iloc[0]['v_date_dt']
