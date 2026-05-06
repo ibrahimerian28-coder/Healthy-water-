@@ -309,25 +309,64 @@ elif st.session_state.user_type == "admin":
                                 if st.button("❌ تراجع", key=f"cancel_del_log_{log_id}"):
                                     st.session_state[f"log_confirm_del_{log_id}"] = False; st.rerun()
 
-                            # 2. منطق التعديل (يفتح نموذج لإدخال البيانات الجديدة)
+                            # 2. منطق التعديل الشامل (يسمح بتعديل كل شيء)
                             if st.session_state.get(f"log_edit_mode_{log_id}", False):
                                 with st.form(key=f"form_log_edit_{log_id}"):
-                                    u_date = st.text_input("التاريخ", value=log_r['visit_date'])
-                                    u_amount = st.number_input("المبلغ", value=float(log_r.get('amount', 0)))
-                                    u_notes = st.text_input("ملاحظات", value=log_r.get('notes', ''))
+                                    st.info(f"تعديل بيانات زيارة يوم {log_r['visit_date']}")
                                     
-                                    if st.form_submit_button("حفظ التعديل"):
-                                        # تجميع البيانات (تأكد من مطابقتها لترتيب أعمدة شيت Logs)
-                                        # مثال: [الهاتف، التاريخ، P1، P2، P3، ممبرين، كربون، كالسايت، انفرا، المبلغ، الملاحظات]
+                                    # أعمدة لتنظيم الخانات داخل الفورم
+                                    e_col1, e_col2 = st.columns(2)
+                                    with e_col1:
+                                        u_date = st.text_input("تاريخ الزيارة", value=log_r['visit_date'])
+                                        u_amount = st.number_input("المبلغ", value=float(log_r.get('amount', 0)))
+                                    
+                                    with e_col2:
+                                        u_notes = st.text_input("ملاحظات", value=log_r.get('notes', ''))
+                                        # يمكن إضافة الفني هنا إذا كان موجوداً في الشيت
+                                    
+                                    st.write("---")
+                                    st.write("**تعديل حالة الشمعات:**")
+                                    
+                                    # إنشاء خانات اختيار تعكس الحالة الحالية في الشيت
+                                    # دالة التأكد من الحالة (تحول ✅ إلى True و ❌ إلى False للعرض في الـ checkbox)
+                                    def check_val(v): return str(v).lower() in ['true', '1', '✅', 'yes']
+
+                                    c1, c2, c3, c4 = st.columns(4)
+                                    u_p1 = c1.checkbox("P1", value=check_val(log_r.get('P1', False)), key=f"up1_{log_id}")
+                                    u_p2 = c2.checkbox("P2", value=check_val(log_r.get('P2', False)), key=f"up2_{log_id}")
+                                    u_p3 = c3.checkbox("P3", value=check_val(log_r.get('P3', False)), key=f"up3_{log_id}")
+                                    u_mem = c4.checkbox("Membrane", value=check_val(log_r.get('membrane', False)), key=f"umem_{log_id}")
+                                    
+                                    c5, c6, c7 = st.columns(3)
+                                    u_post = c5.checkbox("Post Carbon", value=check_val(log_r.get('post_carbon', False)), key=f"upost_{log_id}")
+                                    u_calc = c6.checkbox("Calcite", value=check_val(log_r.get('Calcite', False)), key=f"ucalc_{log_id}")
+                                    u_infra = c7.checkbox("Infrared", value=check_val(log_r.get('infrared', False)), key=f"uinfra_{log_id}")
+
+                                    if st.form_submit_button("حفظ التعديلات الشاملة"):
+                                        # تجميع البيانات بنفس ترتيب أعمدة شيت Logs بدقة
+                                        # الترتيب: [الهاتف، التاريخ، P1، P2، P3، ممبرين، كربون، كالسايت، انفرا، المبلغ، الملاحظات]
                                         updated_log = [
-                                            r['phone'], u_date, log_r['P1'], log_r['P2'], log_r['P3'], 
-                                            log_r['membrane'], log_r['post_carbon'], log_r['Calcite'], 
-                                            log_r['infrared'], u_amount, u_notes
+                                            r['phone'], 
+                                            u_date, 
+                                            "✅" if u_p1 else "❌", 
+                                            "✅" if u_p2 else "❌", 
+                                            "✅" if u_p3 else "❌", 
+                                            "✅" if u_mem else "❌", 
+                                            "✅" if u_post else "❌", 
+                                            "✅" if u_calc else "❌", 
+                                            "✅" if u_infra else "❌", 
+                                            u_amount, 
+                                            u_notes
                                         ]
+                                        
                                         if update_item("Logs", log_id, updated_log):
-                                            st.success("تم التحديث"); st.rerun()
-                                if st.button("إغلاق", key=f"close_log_edit_{log_id}"):
-                                    st.session_state[f"log_edit_mode_{log_id}"] = False; st.rerun()
+                                            st.success("تم تحديث كافة بيانات الزيارة بنجاح!")
+                                            st.session_state[f"log_edit_mode_{log_id}"] = False
+                                            st.rerun()
+                                            
+                                if st.button("❌ إغلاق النافذة", key=f"close_log_edit_{log_id}"):
+                                    st.session_state[f"log_edit_mode_{log_id}"] = False
+                                    st.rerun()
 
                         st.divider() # فاصل قبل أزرار التحميل والاتصال
                         
