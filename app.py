@@ -27,8 +27,12 @@ def execute_gsheet_action(action, sheet_name, data=None, row_index=None):
     payload = {"action": action, "sheet": sheet_name, "data": data, "row_index": row_index}
     try:
         response = requests.post(WEB_APP_URL, json=payload, timeout=15)
+        # هذا السطر سيطبع لنا ما يقوله جوجل بالضبط في أسفل التطبيق
+        st.write(f"رد جوجل: {response.status_code} - {response.text}") 
         return response.status_code == 200
-    except: return False
+    except Exception as e:
+        st.error(f"فشل الاتصال تماماً: {e}")
+        return False
 
 @st.cache_data(ttl=1)
 def load_data(gid):
