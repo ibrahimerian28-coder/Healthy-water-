@@ -255,10 +255,10 @@ elif st.session_state.user_type == "admin":
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
                     
-                    cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
+                    cust_hist = df_m[df_m['name'] == r['name']].sort_values('visit_date_dt', ascending=False)
                     
                     if not cust_hist.empty:
-                        last_v = cust_hist.iloc[0]['v_date_dt']
+                        last_v = cust_hist.iloc[0]['visit_date_dt']
                         next_v = last_v + timedelta(days=to_num(r['cycle'])*30)
                         st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
                         
@@ -307,7 +307,7 @@ elif st.session_state.user_type == "admin":
                             c1.write(f"🏠 **العنوان:** {cust.get('adress', 'غير مسجل')}")
                             c1.write(f"📅 **تاريخ التركيب:** {cust.get('install_date', 'غير مسجل')}")
                             
-                            cust_hist = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt', ascending=False)
+                            cust_hist = df_m[df_m['name'] == cust['name']].sort_values('visit_date_dt', ascending=False)
                             if not cust_hist.empty:
                                 st.write("🛠️ **سجل الصيانات:**")
                                 display_hist = cust_hist.copy()
