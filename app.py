@@ -287,62 +287,7 @@ elif st.session_state.user_type == "admin":
                         show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
                         st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
 
-                        # --- إضافة أزرار التعديل والحذف لكل زيارة أسفل الجدول ---
-                        st.write("⚙️ **التحكم في السجل:**")
-                        for _, log_r in cust_hist.iterrows():
-                            log_id = log_r['row_index_internal']
-                            col_info, col_edit, col_del = st.columns([5, 1, 1])
-                            
-                            with col_info:
-                                st.caption(f"زيارة يوم: {log_r['visit_date']}")
-                            
-                            with col_edit:
-                                if st.button("✏️", key=f"edit_log_{log_id}"):
-                                    st.session_state[f"log_edit_mode_{log_id}"] = True
-                            
-                            with col_del:
-                                if st.button("🗑️", key=f"del_log_{log_id}"):
-                                    st.session_state[f"log_confirm_del_{log_id}"] = True
-
-                            # 1. منطق الحذف
-                            if st.session_state.get(f"log_confirm_del_{log_id}", False):
-                            st.warning(f"حذف زيارة {log_r['visit_date']}؟")
-                            if st.button("✅ تأكيد الحذف", key=f"conf_del_log_{log_id}"):
-                                # قمنا بتغيير "Logs" إلى "Maintenance"
-                                if delete_item("Maintenance", log_id): 
-                                    st.success("تم الحذف")
-                                    st.rerun()
-                                if st.button("❌ تراجع", key=f"cancel_del_log_{log_id}"):
-                                    st.session_state[f"log_confirm_del_{log_id}"] = False
-                                    st.rerun()
-
-                            # 2. منطق التعديل الشامل (يسمح بتعديل كل شيء)
-                            if st.session_state.get(f"log_edit_mode_{log_id}", False):
-                            with st.form(key=f"form_log_edit_{log_id}"):
-                                st.info(f"تعديل بيانات زيارة يوم {log_r['visit_date']}")
-        
-                                # ... هنا توضع حقول الإدخال (التاريخ، المبلغ، الشمعات) التي أضفناها سابقاً ...
-        
-                                if st.form_submit_button("حفظ التعديلات الشاملة"):
-                                    # تجميع البيانات
-                                    updated_log = [
-                                        r['phone'], u_date, 
-                                        "✅" if u_p1 else "❌", "✅" if u_p2 else "❌", "✅" if u_p3 else "❌", 
-                                        "✅" if u_mem else "❌", "✅" if u_post else "❌", "✅" if u_calc else "❌", 
-                                        "✅" if u_infra else "❌", u_amount, u_notes
-                                    ]
-            
-                                    # قمنا بتغيير "Logs" إلى "Maintenance" هنا أيضاً
-                                    if update_item("Maintenance", log_id, updated_log):
-                                        st.success("تم تحديث كافة بيانات الزيارة بنجاح!")
-                                        st.session_state[f"log_edit_mode_{log_id}"] = False
-                                        st.rerun()
-                                            
-                                if st.button("❌ إغلاق النافذة", key=f"close_log_edit_{log_id}"):
-                                    st.session_state[f"log_edit_mode_{log_id}"] = False
-                                    st.rerun()
-
-                        st.divider() # فاصل قبل أزرار التحميل والاتصال
+                        
                         
                         if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
                             pdf_data = generate_customer_pdf(r, cust_hist)
