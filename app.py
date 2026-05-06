@@ -415,42 +415,42 @@ elif st.session_state.user_type == "admin":
             p2 = c2.checkbox("P2")
             p3 = c3.checkbox("P3")
 
-            mem = c1.checkbox("Membrane")
-            post = c2.checkbox("Post Carbon")
-            calc = c3.checkbox("Calcite")
-            infra = c1.checkbox("Infrared")
+            mem = c4.checkbox("Membrane")
+            post = c5.checkbox("Post Carbon")
+            calc = c6.checkbox("Calcite")
+            infra = c7.checkbox("Infrared")
 
-           other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + df_inv['item_name'].tolist())
-           amt = st.number_input("المبلغ المحصل (Amount)", step=1)
-           nts = st.text_area("ملاحظات")
-           spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
+            other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + df_inv['item_name'].tolist())
+            amt = st.number_input("المبلغ المحصل (Amount)", step=1)
+            nts = st.text_area("ملاحظات")
+            spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
 
-           if st.form_submit_button("حفظ الزيارة"):
+            if st.form_submit_button("حفظ الزيارة"):
 
-               cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
+                cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
 
-               data = [
-                   selected_name,
-                   str(v_date),
-                   p1, p2, p3,
-                   mem, post, calc, infra,
-                   other_choice,
-                   amt,
-                   nts,
-                   str(spec_d) if spec_d else "",
-                   cid
-              ]
+                data = [
+                    selected_name,
+                    str(v_date),
+                    p1, p2, p3,
+                    mem, post, calc, infra,
+                    other_choice,
+                    amt,
+                    nts,
+                    str(spec_d) if spec_d else "",
+                    cid
+               ]
 
-              if execute_gsheet_action("append", "Maintenance", data):
-                  st.success("تم التسجيل بنجاح!")
+               if execute_gsheet_action("append", "Maintenance", data):
+                   st.success("تم التسجيل بنجاح!")
 
-              if response.status_code == 200:
-                  st.success("تم تسجيل الصيانة!")
+               if response.status_code == 200:
+                   st.success("تم تسجيل الصيانة!")
 
-              # نحفظ الاسم الحالي عشان ميروحش
-          st.session_state['last_customer_name'] = selected_customer_name
+               # نحفظ الاسم الحالي عشان ميروحش
+           st.session_state['last_customer_name'] = selected_customer_name
 
-              st.rerun()
+               st.rerun()
 
 
          # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
