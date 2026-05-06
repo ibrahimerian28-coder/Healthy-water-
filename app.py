@@ -275,12 +275,12 @@ elif st.session_state.user_type == "admin":
                         # تم تغيير visit_date_dt إلى v_date_dt لتطابق باقي الكود
                          last_v = cust_hist.iloc[0]['v_date_dt']
     
-                        # التأكد أن last_v ليس قيمة فارغة (NaT) قبل الحساب
-                        if pd.notnull(last_v):
-                            next_v = last_v + timedelta(days=to_num(r['cycle']) * 30)
-                            st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
-                        else:
-                            st.info("ℹ️ لا يوجد تاريخ زيارة مسجل لحساب الموعد القادم.")
+                    # التأكد أن last_v ليس قيمة فارغة (NaT) قبل الحساب
+                     if pd.notnull(last_v):
+                         next_v = last_v + timedelta(days=to_num(r['cycle']) * 30)
+                        st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
+                     else:
+                         st.info("ℹ️ لا يوجد تاريخ زيارة مسجل لحساب الموعد القادم.")
                         
                         st.write("🛠️ **سجل الصيانات:**")
                         display_hist = cust_hist.copy()
