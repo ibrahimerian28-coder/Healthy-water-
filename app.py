@@ -405,57 +405,57 @@ elif st.session_state.user_type == "admin":
                 pass
 
         # تأكد إن الجزء ده جوه صفحة تسجيل الصيانة
-with st.form("maintenance_form"):
-    st.subheader("تسجيل صيانة جديدة")
+        with st.form("maintenance_form"):
+            st.subheader("تسجيل صيانة جديدة")
     
-    # استرجاع الاسم الأخير من الـ session_state لو موجود
-    default_name = st.session_state.get('last_selected_name', df_c['name'].iloc[0] if not df_c.empty else "")
+            # استرجاع الاسم الأخير من الـ session_state لو موجود
+            default_name = st.session_state.get('last_selected_name', df_c['name'].iloc[0] if not df_c.empty else "")
     
-    # اختيار العميل
-    customer_name = st.selectbox("اسم العميل", options=df_c['name'].tolist(), 
-                                 index=df_c['name'].tolist().index(default_name) if default_name in df_c['name'].tolist() else 0)
+            # اختيار العميل
+            customer_name = st.selectbox("اسم العميل", options=df_c['name'].tolist(), 
+                                         index=df_c['name'].tolist().index(default_name) if default_name in df_c['name'].tolist() else 0)
     
-    visit_date = st.date_input("تاريخ الزيارة", datetime.now())
+            visit_date = st.date_input("تاريخ الزيارة", datetime.now())
     
-    # توزيع الشمعات في أعمدة
-    c1, c2, c3, c4 = st.columns(4)
-    p1 = c1.checkbox("P1")
-    p2 = c2.checkbox("P2")
-    p3 = c3.checkbox("P3")
-    mem = c4.checkbox("Membrane") # السطر اللي كان بيضرب عندك
+            # توزيع الشمعات في أعمدة
+            c1, c2, c3, c4 = st.columns(4)
+            p1 = c1.checkbox("P1")
+            p2 = c2.checkbox("P2")
+            p3 = c3.checkbox("P3")
+            mem = c4.checkbox("Membrane") # السطر اللي كان بيضرب عندك
     
-    c5, c6, c7 = st.columns(3)
-    post = c5.checkbox("Post Carbon")
-    calc = c6.checkbox("Calcite")
-    infra = c7.checkbox("Infrared")
+            c5, c6, c7 = st.columns(3)
+            post = c5.checkbox("Post Carbon")
+            calc = c6.checkbox("Calcite")
+            infra = c7.checkbox("Infrared")
     
-    other = st.text_input("أجزاء أخرى")
-    amount = st.number_input("المبلغ المحصل", min_value=0, value=0)
-    notes = st.text_area("ملاحظات")
+            other = st.text_input("أجزاء أخرى")
+            amount = st.number_input("المبلغ المحصل", min_value=0, value=0)
+            notes = st.text_area("ملاحظات")
 
-    # الزرار اللي كان ناقص وهو اللي بيحل المشكلة
-    submit_maintenance = st.form_submit_button("حفظ الصيانة")
+            # الزرار اللي كان ناقص وهو اللي بيحل المشكلة
+            submit_maintenance = st.form_submit_button("حفظ الصيانة")
 
-# معالجة الضغط على الزرار (خارج نطاق الـ form أو جواه)
-if submit_maintenance:
-    new_data = {
-        "name": customer_name,
-        "visit_date": str(visit_date),
-        "P1": p1, "P2": p2, "P3": p3, "membrane": mem,
-        "post_carbon": post, "Calcite": calc, "infrared": infra,
-        "other": other, "amount": amount, "notes": notes
-    }
+        # معالجة الضغط على الزرار (خارج نطاق الـ form أو جواه)
+        if submit_maintenance:
+            new_data = {
+                "name": customer_name,
+                "visit_date": str(visit_date),
+                "P1": p1, "P2": p2, "P3": p3, "membrane": mem,
+                "post_carbon": post, "Calcite": calc, "infrared": infra,
+                "other": other, "amount": amount, "notes": notes
+            }
     
-    success = execute_gsheet_action("add", "Maintenance", new_data)
+            success = execute_gsheet_action("add", "Maintenance", new_data)
     
-    if success:
-        st.success("✅ تم تسجيل الصيانة بنجاح")
-        # حفظ الاسم عشان يفضل موجود المرة الجاية
-        st.session_state['last_selected_name'] = customer_name
-        # إعادة تشغيل التطبيق لتفريغ باقي الخانات
-        st.rerun()
-    else:
-        st.error("❌ فشل الاتصال بالسيرفر")
+            if success:
+                st.success("✅ تم تسجيل الصيانة بنجاح")
+                # حفظ الاسم عشان يفضل موجود المرة الجاية
+                st.session_state['last_selected_name'] = customer_name
+                # إعادة تشغيل التطبيق لتفريغ باقي الخانات
+                st.rerun()
+            else:
+                st.error("❌ فشل الاتصال بالسيرفر")
     elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
         total_inventory_value = 0 
