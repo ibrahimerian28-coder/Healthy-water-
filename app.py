@@ -278,7 +278,7 @@ elif st.session_state.user_type == "admin":
                         # التأكد أن last_v ليس قيمة فارغة (NaT) قبل الحساب
                          if pd.notnull(last_v):
                              next_v = last_v + timedelta(days=to_num(r['cycle']) * 30)
-                            st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
+                             st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
                          else:
                              st.info("ℹ️ لا يوجد تاريخ زيارة مسجل لحساب الموعد القادم.")
                         
