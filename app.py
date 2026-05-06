@@ -439,18 +439,18 @@ elif st.session_state.user_type == "admin":
                     nts,
                     str(spec_d) if spec_d else "",
                     cid
-               ]
+                ]
 
-               if execute_gsheet_action("append", "Maintenance", data):
-                   st.success("تم التسجيل بنجاح!")
+                if execute_gsheet_action("append", "Maintenance", data):
+                    st.success("تم التسجيل بنجاح!")
 
-               if response.status_code == 200:
-                   st.success("تم تسجيل الصيانة!")
+                if response.status_code == 200:
+                    st.success("تم تسجيل الصيانة!")
 
-               # نحفظ الاسم الحالي عشان ميروحش
-           st.session_state['last_customer_name'] = selected_customer_name
+                # نحفظ الاسم الحالي عشان ميروحش
+            st.session_state['last_customer_name'] = selected_customer_name
 
-               st.rerun()
+                st.rerun()
 
 
          # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
