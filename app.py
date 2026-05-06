@@ -259,9 +259,13 @@ elif st.session_state.user_type == "admin":
 
                     c1, c2 = st.columns(2)
 
-                    c1.write(f"🏠 **العنوان:** {r.get('adress', 'غير مسجل')}")
+                    c1.write(f"🏠 **العنوان:** {r.get('address', 'غير مسجل')}")
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
+         location_url = r.get('location', '')
+         if location_url and "http" 
+         in str(location_url):
+             st.markdown(f"[🔗 فتح الموقع على الخريطة]({location_url})")
 
                     # --- معالجة بيانات الصيانة ---
                     if not df_m.empty and 'name' in df_m.columns:
