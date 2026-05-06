@@ -218,30 +218,22 @@ elif st.session_state.user_type == "admin":
             new_area = st.text_input("أو أضف منطقة جديدة")
             final_area = new_area if new_area else area
             loc = st.text_input("رابط اللوكيشن (Location URL)")
-            # 1. تعريف المتغير أولاً
-            inst_date_val = "" 
+            # حقل التاريخ مع السماح بقيمة فارغة افتراضياً
+            # نستخدم value=None لجعل الحقل يبدأ فارغاً تماماً
+            inst_date = st.date_input("تاريخ التركيب (اختياري - اتركه كما هو إذا لم يوجد تاريخ)", value=None)
             
-            # 2. عرض الخيار للمستخدم
-            has_date = st.checkbox("📅 هل تريد تسجيل تاريخ التركيب؟")
-            
-            if has_date:
-                # لن يظهر هذا الحقل إلا إذا علم المستخدم على المربع
-                inst_date_val = st.date_input("اختر تاريخ التركيب")
-            
-            cycle = st.number_input("دورة الصيانة بالشهر (cycle)", value=3)
-            status = st.selectbox("الحالة (status)", ["نشط", "راكد"])
+            cycle = st.number_input("دورة الصيانة بالشهر", value=3)
+            status = st.selectbox("الحالة", ["نشط", "راكد"])
 
             if st.form_submit_button("حفظ العميل الجديد"):
-                # 3. تحويل التاريخ لنص فقط إذا وجد، وإلا يرسل فارغاً
-                final_date = str(inst_date_val) if inst_date_val != "" else ""
+                # إذا كان التاريخ None (فارغ)، نرسل نصاً فارغاً للشيت
+                final_date = str(inst_date) if inst_date is not None else ""
                 
-                # ترتيب البيانات للإرسال (تأكد من مطابقتها لأعمدة الشيت)
                 data = [name, phone, p1, p2, p3, p4, address, final_area, loc, final_date, cycle, status]
                 
                 if execute_gsheet_action("append", "Customers", data):
                     st.success("✅ تم حفظ العميل بنجاح!")
                     st.rerun()
-
     elif menu == "بيانات العملاء":
         st.header("👥 إدارة العملاء")
         search = st.text_input("🔍 بحث (اسم، هاتف، منطقة، ID)")
