@@ -241,6 +241,10 @@ elif st.session_state.user_type == "admin":
                 data = [name, phone, p1, p2, p3, p4, address, final_area, loc, str(inst_date), cycle, status]
                 if execute_gsheet_action("append", "Customers", data):
                     st.success("تم الحفظ بنجاح!"); st.rerun()
+            if response.status_code == 200:
+                st.success("تم حفظ العميل بنجاح!")
+                st.rerun() # هذا سيعيد الصفحة لحالتها الأولى ويفرغ كل الخانات
+    
 
     elif menu == "بيانات العملاء":
         st.header("👥 إدارة العملاء")
@@ -262,10 +266,6 @@ elif st.session_state.user_type == "admin":
                     c1.write(f"🏠 **العنوان:** {r.get('address', 'غير مسجل')}")
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
-                 location_url = r.get('location', '')
-                 if location_url and "http" 
-                 in str(location_url):
-                     st.markdown(f"[🔗 فتح الموقع على الخريطة]({location_url})")
 
                     # --- معالجة بيانات الصيانة ---
                     if not df_m.empty and 'name' in df_m.columns:
@@ -416,7 +416,22 @@ elif st.session_state.user_type == "admin":
                 cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
                 data = [selected_name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_choice, amt, nts, str(spec_d) if spec_d else "", cid]
                 if execute_gsheet_action("append", "Maintenance", data):
-                    st.success("تم التسجيل بنجاح!"); st.rerun()
+                    st.success("تم التسجيل بنجاح!")
+           if response.status_code == 200:
+               st.success("تم تسجيل الصيانة!")
+               # نحفظ الاسم الحالي عشان ميروحش
+           st.session_state['last_customer_name'] = selected_customer_name 
+               st.rerun()
+
+          # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
+          default_index = 0
+          if 'last_customer_name' in st.session_state:
+              try:
+                  default_index = list(all_customers).index(st.session_state['last_customer_name'])
+          except: pass
+
+          selected_name = st.selectbox("اختار العميل", all_customers, index=default_index)
+
 
     elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
