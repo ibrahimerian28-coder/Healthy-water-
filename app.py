@@ -420,17 +420,17 @@ elif st.session_state.user_type == "admin":
                 if response.status_code == 200:
                     st.success("تم تسجيل الصيانة!")
                 # نحفظ الاسم الحالي عشان ميروحش
-               st.session_state['last_customer_name'] = selected_customer_name 
-                   st.rerun()
+                st.session_state['last_customer_name'] = selected_customer_name 
+                    st.rerun()
 
-               # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
-              default_index = 0
-              if 'last_customer_name' in st.session_state:
-                  try:
-                    default_index = list(all_customers).index(st.session_state['last_customer_name'])
-                  except: pass
+                # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
+                default_index = 0
+                if 'last_customer_name' in st.session_state:
+                    try:
+                        default_index = list(all_customers).index(st.session_state['last_customer_name'])
+                    except: pass
 
-              selected_name = st.selectbox("اختار العميل", all_customers, index=default_index)
+                selected_name = st.selectbox("اختار العميل", all_customers, index=default_index)
 
 
     elif menu == "المخزن 📦":
