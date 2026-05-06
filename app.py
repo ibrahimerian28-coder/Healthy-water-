@@ -329,9 +329,22 @@ elif st.session_state.user_type == "admin":
                                 if update_item("Customers", r['row_index_internal'], updated_data):
                                     st.success("تم التحديث بنجاح!"); st.rerun()
                             
-                            if st.button("إغلاق"):
-                                st.session_state[f"edit_mode_{r['row_index_internal']}"] = False
-                                st.rerun()
+                            # نهاية الـ form هنا
+                            if st.form_submit_button("حفظ التعديلات"):
+                                updated_data = [
+                                    u_name, u_phone, r.get('phone_1',''), r.get('phone_2',''), 
+                                    r.get('phone_3',''), r.get('phone_4',''), u_address, 
+                                    u_area, u_loc, r['install_date'], u_cycle, r['status']
+                                ]
+                                if update_item("Customers", r['row_index_internal'], updated_data):
+                                    st.success("تم التحديث بنجاح!")
+                                    st.session_state[f"edit_mode_{r['row_index_internal']}"] = False # إغلاق الوضع بعد الحفظ
+                                    st.rerun()
+                        
+                        # --- زر الإغلاق الآن خارج الـ Form تماماً ---
+                        if st.button("❌ إلغاء التعديل", key=f"close_edit_{r['row_index_internal']}"):
+                            st.session_state[f"edit_mode_{r['row_index_internal']}"] = False
+                            st.rerun()
 
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
