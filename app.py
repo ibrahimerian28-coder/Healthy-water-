@@ -11,7 +11,7 @@ from arabic_reshaper import reshape
 from bidi.algorithm import get_display
 
 # --- 1. الإعدادات والروابط المركزية ---
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwSW9s7nKgp5_fPRh9P7a5UqJ84bYfJrs7jkwTkCVRAFvHY3DZEcQfZ0PBGY4ksapT-aw/exec"
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxx-qHDqWr6MBd26cjpF1-_c7o1c3DSUKeiq1g4Rorm_1xHWmNlhhVYXPI3SyNHRwaFEQ/exec"
 LOGO_PATH = "logo.png"
 ADMIN_PASSWORD = "HgM18082019$&)"
 COMPANY_PHONE = "01286609535"
