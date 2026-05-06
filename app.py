@@ -137,7 +137,7 @@ def generate_customer_pdf(cust_row, history_df):
     if not history_df.empty:
         # ترتيب تنازلي (الأحدث فوق)
         history_sorted = history_df.copy()
-        if 'v_date_dt' in history_sorted.columns:
+        if 'v_date_dt' in history_sorted.columns: # تأكد أنها v_date_dt وليست visit_date_dt
             history_sorted = history_sorted.sort_values('v_date_dt', ascending=False)
         
         for i, (idx, r) in enumerate(history_sorted.iterrows()):
@@ -255,7 +255,7 @@ elif st.session_state.user_type == "admin":
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
                     
-                    cust_hist = df_m[df_m['name'] == r['name']].sort_values('visit_date_dt', ascending=False)
+                    cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
                     
                     if not cust_hist.empty:
                         last_v = cust_hist.iloc[0]['visit_date_dt']
@@ -307,7 +307,7 @@ elif st.session_state.user_type == "admin":
                             c1.write(f"🏠 **العنوان:** {cust.get('adress', 'غير مسجل')}")
                             c1.write(f"📅 **تاريخ التركيب:** {cust.get('install_date', 'غير مسجل')}")
                             
-                            cust_hist = df_m[df_m['name'] == cust['name']].sort_values('visit_date_dt', ascending=False)
+                            cust_hist = df_m[df_m['name'] == cust['name']].sort_values('v_date_dt', ascending=False)
                             if not cust_hist.empty:
                                 st.write("🛠️ **سجل الصيانات:**")
                                 display_hist = cust_hist.copy()
