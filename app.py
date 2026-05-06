@@ -218,23 +218,29 @@ elif st.session_state.user_type == "admin":
             new_area = st.text_input("أو أضف منطقة جديدة")
             final_area = new_area if new_area else area
             loc = st.text_input("رابط اللوكيشن (Location URL)")
-            # تغيير من date_input إلى checkbox أو السماح بـ None
-            has_date = st.checkbox("إضافة تاريخ تركيب؟", value=False)
+            # 1. تعريف المتغير أولاً
+            inst_date_val = "" 
+            
+            # 2. عرض الخيار للمستخدم
+            has_date = st.checkbox("📅 هل تريد تسجيل تاريخ التركيب؟")
+            
             if has_date:
-                inst_date = st.date_input("تاريخ التركيب")
-            else:
-                inst_date = "" # سيتم تسجيلها خانة فارغة في الشيت
+                # لن يظهر هذا الحقل إلا إذا علم المستخدم على المربع
+                inst_date_val = st.date_input("اختر تاريخ التركيب")
             
-            cycle = st.number_input("دورة الصيانة بالشهر", value=3)
-            status = st.selectbox("الحالة", ["نشط", "راكد"])
-            
+            cycle = st.number_input("دورة الصيانة بالشهر (cycle)", value=3)
+            status = st.selectbox("الحالة (status)", ["نشط", "راكد"])
+
             if st.form_submit_button("حفظ العميل الجديد"):
-                # تحويل التاريخ لنص فقط إذا تم اختياره، وإلا تركه فارغاً
-                final_date = str(inst_date) if inst_date else ""
+                # 3. تحويل التاريخ لنص فقط إذا وجد، وإلا يرسل فارغاً
+                final_date = str(inst_date_val) if inst_date_val != "" else ""
                 
+                # ترتيب البيانات للإرسال (تأكد من مطابقتها لأعمدة الشيت)
                 data = [name, phone, p1, p2, p3, p4, address, final_area, loc, final_date, cycle, status]
+                
                 if execute_gsheet_action("append", "Customers", data):
-                    st.success("تم الحفظ بنجاح!"); st.rerun()
+                    st.success("✅ تم حفظ العميل بنجاح!")
+                    st.rerun()
 
     elif menu == "بيانات العملاء":
         st.header("👥 إدارة العملاء")
