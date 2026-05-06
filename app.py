@@ -448,7 +448,7 @@ elif st.session_state.user_type == "admin":
                     st.success("تم تسجيل الصيانة!")
 
                 # نحفظ الاسم الحالي عشان ميروحش
-            st.session_state['last_customer_name'] = selected_customer_name
+          st.session_state['last_customer_name'] = selected_customer_name
 
                 st.rerun()
 
