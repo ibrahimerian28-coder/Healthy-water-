@@ -218,12 +218,21 @@ elif st.session_state.user_type == "admin":
             new_area = st.text_input("أو أضف منطقة جديدة")
             final_area = new_area if new_area else area
             loc = st.text_input("رابط اللوكيشن (Location URL)")
-            inst_date = st.date_input("تاريخ التركيب")
+            # تغيير من date_input إلى checkbox أو السماح بـ None
+            has_date = st.checkbox("إضافة تاريخ تركيب؟", value=False)
+            if has_date:
+                inst_date = st.date_input("تاريخ التركيب")
+            else:
+                inst_date = "" # سيتم تسجيلها خانة فارغة في الشيت
+            
             cycle = st.number_input("دورة الصيانة بالشهر", value=3)
             status = st.selectbox("الحالة", ["نشط", "راكد"])
+            
             if st.form_submit_button("حفظ العميل الجديد"):
-                # تأكد من ترتيب البيانات ليتطابق مع ترتيب أعمدة الشيت (الاسم، الهاتف، هاتف1... العنوان، المنطقة، اللوكيشن...)
-                data = [name, phone, p1, p2, p3, p4, address, final_area, loc, str(inst_date), cycle, status]
+                # تحويل التاريخ لنص فقط إذا تم اختياره، وإلا تركه فارغاً
+                final_date = str(inst_date) if inst_date else ""
+                
+                data = [name, phone, p1, p2, p3, p4, address, final_area, loc, final_date, cycle, status]
                 if execute_gsheet_action("append", "Customers", data):
                     st.success("تم الحفظ بنجاح!"); st.rerun()
 
