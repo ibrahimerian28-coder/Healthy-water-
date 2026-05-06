@@ -417,20 +417,20 @@ elif st.session_state.user_type == "admin":
                 data = [selected_name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_choice, amt, nts, str(spec_d) if spec_d else "", cid]
                 if execute_gsheet_action("append", "Maintenance", data):
                     st.success("تم التسجيل بنجاح!")
-           if response.status_code == 200:
-               st.success("تم تسجيل الصيانة!")
-               # نحفظ الاسم الحالي عشان ميروحش
-           st.session_state['last_customer_name'] = selected_customer_name 
-               st.rerun()
+                if response.status_code == 200:
+                    st.success("تم تسجيل الصيانة!")
+                # نحفظ الاسم الحالي عشان ميروحش
+               st.session_state['last_customer_name'] = selected_customer_name 
+                   st.rerun()
 
-          # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
-          default_index = 0
-          if 'last_customer_name' in st.session_state:
-              try:
-                  default_index = list(all_customers).index(st.session_state['last_customer_name'])
-          except: pass
+               # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
+              default_index = 0
+              if 'last_customer_name' in st.session_state:
+                  try:
+                    default_index = list(all_customers).index(st.session_state['last_customer_name'])
+                  except: pass
 
-          selected_name = st.selectbox("اختار العميل", all_customers, index=default_index)
+              selected_name = st.selectbox("اختار العميل", all_customers, index=default_index)
 
 
     elif menu == "المخزن 📦":
