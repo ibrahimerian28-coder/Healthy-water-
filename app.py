@@ -404,65 +404,58 @@ elif st.session_state.user_type == "admin":
             except:
                 pass
 
-        with st.form("main_m_form"):
+        # تأكد إن الجزء ده جوه صفحة تسجيل الصيانة
+with st.form("maintenance_form"):
+    st.subheader("تسجيل صيانة جديدة")
+    
+    # استرجاع الاسم الأخير من الـ session_state لو موجود
+    default_name = st.session_state.get('last_selected_name', df_c['name'].iloc[0] if not df_c.empty else "")
+    
+    # اختيار العميل
+    customer_name = st.selectbox("اسم العميل", options=df_c['name'].tolist(), 
+                                 index=df_c['name'].tolist().index(default_name) if default_name in df_c['name'].tolist() else 0)
+    
+    visit_date = st.date_input("تاريخ الزيارة", datetime.now())
+    
+    # توزيع الشمعات في أعمدة
+    c1, c2, c3, c4 = st.columns(4)
+    p1 = c1.checkbox("P1")
+    p2 = c2.checkbox("P2")
+    p3 = c3.checkbox("P3")
+    mem = c4.checkbox("Membrane") # السطر اللي كان بيضرب عندك
+    
+    c5, c6, c7 = st.columns(3)
+    post = c5.checkbox("Post Carbon")
+    calc = c6.checkbox("Calcite")
+    infra = c7.checkbox("Infrared")
+    
+    other = st.text_input("أجزاء أخرى")
+    amount = st.number_input("المبلغ المحصل", min_value=0, value=0)
+    notes = st.text_area("ملاحظات")
 
-            selected_name = st.selectbox("اختر العميل", df_c['name'].tolist(), index=default_idx)
-            v_date = st.date_input("تاريخ الزيارة", datetime.now())
+    # الزرار اللي كان ناقص وهو اللي بيحل المشكلة
+    submit_maintenance = st.form_submit_button("حفظ الصيانة")
 
-            c1, c2, c3 = st.columns(3)
-
-            p1 = c1.checkbox("P1")
-            p2 = c2.checkbox("P2")
-            p3 = c3.checkbox("P3")
-
-            mem = c4.checkbox("Membrane")
-            post = c5.checkbox("Post Carbon")
-            calc = c6.checkbox("Calcite")
-            infra = c7.checkbox("Infrared")
-
-            other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + df_inv['item_name'].tolist())
-            amt = st.number_input("المبلغ المحصل (Amount)", step=1)
-            nts = st.text_area("ملاحظات")
-            spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
-
-            if st.form_submit_button("حفظ الزيارة"):
-
-                cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
-
-                data = [
-                    selected_name,
-                    str(v_date),
-                    p1, p2, p3,
-                    mem, post, calc, infra,
-                    other_choice,
-                    amt,
-                    nts,
-                    str(spec_d) if spec_d else "",
-                    cid
-                ]
-
-                if execute_gsheet_action("append", "Maintenance", data):
-                    st.success("تم التسجيل بنجاح!")
-
-                if response.status_code == 200:
-                    st.success("تم تسجيل الصيانة!")
-
-                # نحفظ الاسم الحالي عشان ميروحش
-                    st.session_state['last_customer_name'] = selected_customer_name
-
-                    st.rerun()
-
-
-                # وفي خانة اختيار الاسم فوق، اجعل القيمة الافتراضية هي المحفوظة:
-                default_index = 0
-                if 'last_customer_name' in st.session_state:
-                    try:
-                        default_index = list(all_customers).index(st.session_state['last_customer_name'])
-                    except: 
-                        pass
-
-                selected_name = st.selectbox("اختار العميل", all_customers, index=default_index)
-
+# معالجة الضغط على الزرار (خارج نطاق الـ form أو جواه)
+if submit_maintenance:
+    new_data = {
+        "name": customer_name,
+        "visit_date": str(visit_date),
+        "P1": p1, "P2": p2, "P3": p3, "membrane": mem,
+        "post_carbon": post, "Calcite": calc, "infrared": infra,
+        "other": other, "amount": amount, "notes": notes
+    }
+    
+    success = execute_gsheet_action("add", "Maintenance", new_data)
+    
+    if success:
+        st.success("✅ تم تسجيل الصيانة بنجاح")
+        # حفظ الاسم عشان يفضل موجود المرة الجاية
+        st.session_state['last_selected_name'] = customer_name
+        # إعادة تشغيل التطبيق لتفريغ باقي الخانات
+        st.rerun()
+    else:
+        st.error("❌ فشل الاتصال بالسيرفر")
     elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
         total_inventory_value = 0 
