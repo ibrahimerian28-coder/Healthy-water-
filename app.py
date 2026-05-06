@@ -241,107 +241,45 @@ elif st.session_state.user_type == "admin":
                 data = [name, phone, p1, p2, p3, p4, address, final_area, loc, str(inst_date), cycle, status]
                 if execute_gsheet_action("append", "Customers", data):
                     st.success("تم الحفظ بنجاح!"); st.rerun()
-            if response.status_code == 200:
-                st.success("تم حفظ العميل بنجاح!")
-                st.rerun() # هذا سيعيد الصفحة لحالتها الأولى ويفرغ كل الخانات
-    
 
     elif menu == "بيانات العملاء":
         st.header("👥 إدارة العملاء")
-
         search = st.text_input("🔍 بحث (اسم، هاتف، منطقة، ID)")
-        if search:
-            filtered = df_c[df_c.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)]
-        else:
-            filtered = df_c
-
+        filtered = df_c[df_c.astype(str).apply(lambda x: x.str.contains(search, case=False)).any(axis=1)] if search else df_c
         for area, group in filtered.groupby('area'):
             st.markdown(f"### 📍 {area}")
-
             for _, r in group.iterrows():
                 with st.expander(f"👤 {r['name']} | 📞 {r['phone']}"):
-
                     c1, c2 = st.columns(2)
-
-                    c1.write(f"🏠 **العنوان:** {r.get('address', 'غير مسجل')}")
+                    c1.write(f"🏠 **العنوان:** {r.get('adress', 'غير مسجل')}")
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
-
-                    # --- معالجة بيانات الصيانة ---
-                    if not df_m.empty and 'name' in df_m.columns:
-                        cust_hist = df_m[df_m['name'] == r['name']].copy()
-
-                        if not cust_hist.empty:
-                            # إنشاء عمود التاريخ لو مش موجود
-                            if 'v_date_dt' not in cust_hist.columns:
-                                cust_hist['v_date_dt'] = pd.to_datetime(
-                                    cust_hist['visit_date'], errors='coerce'
-                                )
-
-                            # معالجة القيم الفارغة
-                            cust_hist['v_date_dt'] = cust_hist['v_date_dt'].fillna(
-                                pd.Timestamp('1900-01-01')
-                            )
-
-                            # ترتيب البيانات
-                            cust_hist = cust_hist.sort_values(
-                                'v_date_dt', ascending=False
-                            )
-                        else:
-                            cust_hist = pd.DataFrame(columns=df_m.columns)
-                    else:
-                        cust_hist = pd.DataFrame()
-
-                    # تجهيز PDF (بدون حذف السطر)
-                    pdf_data = generate_customer_pdf(r, cust_hist)
-
-                    # --- عرض البيانات ---
+                    
+                    cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
+                    
                     if not cust_hist.empty:
                         last_v = cust_hist.iloc[0]['v_date_dt']
-                        next_v = last_v + timedelta(days=to_num(r['cycle']) * 30)
-
+                        next_v = last_v + timedelta(days=to_num(r['cycle'])*30)
                         st.warning(f"🕒 **تاريخ الزيارة القادمة المتوقع:** {next_v.date()}")
-
+                        
                         st.write("🛠️ **سجل الصيانات:**")
-
                         display_hist = cust_hist.copy()
                         check_cols = ['P1', 'P2', 'P3', 'membrane', 'post_carbon', 'Calcite', 'infrared']
-
                         for col in check_cols:
                             if col in display_hist.columns:
-                                display_hist[col] = display_hist[col].apply(
-                                    lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌"
-                                )
-
+                                display_hist[col] = display_hist[col].apply(lambda x: "✅" if str(x).lower() in ['true', '1', '✅'] else "❌")
+                        
                         show_cols = ['visit_date'] + check_cols + ['amount', 'notes']
-                        st.dataframe(
-                            display_hist[show_cols],
-                            use_container_width=True,
-                            hide_index=True
-                        )
-
+                        st.dataframe(display_hist[show_cols], use_container_width=True, hide_index=True)
+                        
                         if st.button("📄 تحميل تقرير PDF", key=f"pdf_{r['row_index_internal']}"):
                             pdf_data = generate_customer_pdf(r, cust_hist)
-                            st.download_button(
-                                label="اضغط لبدء التحميل",
-                                data=pdf_data,
-                                file_name=f"{r['name']}.pdf",
-                                mime="application/pdf"
-                            )
-
-                    # --- أرقام الهاتف ---
-                    phones = [
-                        r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4']
-                        if str(r.get(p, '')).strip() != ""
-                    ]
-
+                            st.download_button(label="اضغط لبدء التحميل", data=pdf_data, file_name=f"{r['name']}.pdf", mime="application/pdf")
+                    
+                    phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(r.get(p, '')).strip() != ""]
                     for ph in phones:
-                        st.markdown(
-                            f"<b>📞 {ph}</b> "
-                            f"<a href='tel:{ph}'>اتصال</a> | "
-                            f"<a href='https://wa.me/2{ph}'>واتساب</a>",
-                            unsafe_allow_html=True
-                        )
+                        st.markdown(f"<b>📞 {ph}</b> <a href='tel:{ph}'>اتصال</a> | <a href='https://wa.me/2{ph}'>واتساب</a>", unsafe_allow_html=True)
+
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
         today = datetime.now().date()
@@ -399,63 +337,25 @@ elif st.session_state.user_type == "admin":
         st.header("🔧 تسجيل زيارة صيانة")
         default_idx = 0
         if 'target_customer' in st.session_state:
-            try:
-                default_idx = df_c['name'].tolist().index(st.session_state.target_customer)
-            except:
-                pass
+            try: default_idx = df_c['name'].tolist().index(st.session_state.target_customer)
+            except: pass
+        with st.form("main_m_form"):
+            selected_name = st.selectbox("اختر العميل", df_c['name'].tolist(), index=default_idx)
+            v_date = st.date_input("تاريخ الزيارة", datetime.now())
+            c1, c2, c3 = st.columns(3)
+            p1 = c1.checkbox("P1"); p2 = c2.checkbox("P2"); p3 = c3.checkbox("P3")
+            mem = c1.checkbox("Membrane"); post = c2.checkbox("Post Carbon")
+            calc = c3.checkbox("Calcite"); infra = c1.checkbox("Infrared")
+            other_choice = st.selectbox("قطع غيار أخرى (Other)", [""] + df_inv['item_name'].tolist())
+            amt = st.number_input("المبلغ المحصل (Amount)", step=1)
+            nts = st.text_area("ملاحظات")
+            spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
+            if st.form_submit_button("حفظ الزيارة"):
+                cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
+                data = [selected_name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_choice, amt, nts, str(spec_d) if spec_d else "", cid]
+                if execute_gsheet_action("append", "Maintenance", data):
+                    st.success("تم التسجيل بنجاح!"); st.rerun()
 
-        # تأكد إن الجزء ده جوه صفحة تسجيل الصيانة
-        with st.form("maintenance_form"):
-            st.subheader("تسجيل صيانة جديدة")
-    
-            # استرجاع الاسم الأخير من الـ session_state لو موجود
-            default_name = st.session_state.get('last_selected_name', df_c['name'].iloc[0] if not df_c.empty else "")
-    
-            # اختيار العميل
-            customer_name = st.selectbox("اسم العميل", options=df_c['name'].tolist(), 
-                                         index=df_c['name'].tolist().index(default_name) if default_name in df_c['name'].tolist() else 0)
-    
-            visit_date = st.date_input("تاريخ الزيارة", datetime.now())
-    
-            # توزيع الشمعات في أعمدة
-            c1, c2, c3, c4 = st.columns(4)
-            p1 = c1.checkbox("P1")
-            p2 = c2.checkbox("P2")
-            p3 = c3.checkbox("P3")
-            mem = c4.checkbox("Membrane") # السطر اللي كان بيضرب عندك
-    
-            c5, c6, c7 = st.columns(3)
-            post = c5.checkbox("Post Carbon")
-            calc = c6.checkbox("Calcite")
-            infra = c7.checkbox("Infrared")
-    
-            other = st.text_input("أجزاء أخرى")
-            amount = st.number_input("المبلغ المحصل", min_value=0, value=0)
-            notes = st.text_area("ملاحظات")
-
-            # الزرار اللي كان ناقص وهو اللي بيحل المشكلة
-            submit_maintenance = st.form_submit_button("حفظ الصيانة")
-
-        # معالجة الضغط على الزرار (خارج نطاق الـ form أو جواه)
-        if submit_maintenance:
-            new_data = {
-                "name": customer_name,
-                "visit_date": str(visit_date),
-                "P1": p1, "P2": p2, "P3": p3, "membrane": mem,
-                "post_carbon": post, "Calcite": calc, "infrared": infra,
-                "other": other, "amount": amount, "notes": notes
-            }
-    
-            success = execute_gsheet_action("add", "Maintenance", new_data)
-    
-            if success:
-                st.success("✅ تم تسجيل الصيانة بنجاح")
-                # حفظ الاسم عشان يفضل موجود المرة الجاية
-                st.session_state['last_selected_name'] = customer_name
-                # إعادة تشغيل التطبيق لتفريغ باقي الخانات
-                st.rerun()
-            else:
-                st.error("❌ فشل الاتصال بالسيرفر")
     elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
         total_inventory_value = 0 
@@ -802,3 +702,4 @@ elif st.session_state.user_type == "admin":
                 import urllib.parse
                 wa_url = f"https://wa.me/2{COMPANY_PHONE}?text={urllib.parse.quote(order_msg)}"
                 st.markdown(f'<a href="{wa_url}" target="_blank" style="text-decoration:none; background-color:#25D366; color:white; padding:10px; border-radius:5px;">✅ اضغط هنا لتأكيد الطلب عبر واتساب</a>', unsafe_allow_html=True)
+
