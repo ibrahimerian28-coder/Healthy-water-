@@ -52,6 +52,11 @@ def read_gsheet(sheet_name):
     # دالة افتراضية لتحميل بيانات المتجر بناءً على الاسم
     gids = {"Store_Products": "123456789"} # يجب التأكد من الـ GID الصحيح لهذا الشيت
     return load_data(gids.get(sheet_name, "0"))
+def delete_item(sheet_name, row_idx):
+    return execute_gsheet_action("delete", sheet_name, row_index=row_idx)
+
+def update_item(sheet_name, row_idx, data):
+    return execute_gsheet_action("update", sheet_name, data=data, row_index=row_idx)
 
 # --- 3. تحميل البيانات ---
 df_c = load_data("0")          # Customers
@@ -280,6 +285,53 @@ elif st.session_state.user_type == "admin":
                     phones = [r.get(p) for p in ['phone', 'phone_1', 'phone_2', 'phone_3', 'phone_4'] if str(r.get(p, '')).strip() != ""]
                     for ph in phones:
                         st.markdown(f"<b>📞 {ph}</b> <a href='tel:{ph}'>اتصال</a> | <a href='https://wa.me/2{ph}'>واتساب</a>", unsafe_allow_html=True)
+                    # --- إضافة أزرار التعديل والحذف ---
+                    st.divider()
+                    edit_col, del_col = st.columns(2)
+                    
+                    with edit_col:
+                        if st.button("📝 تعديل البيانات", key=f"edit_btn_{r['row_index_internal']}"):
+                            st.session_state[f"edit_mode_{r['row_index_internal']}"] = True
+
+                    with del_col:
+                        if st.button("🗑️ حذف العميل", key=f"del_btn_{r['row_index_internal']}"):
+                            st.session_state[f"confirm_del_{r['row_index_internal']}"] = True
+
+                    # 1. منطق الحذف مع رسالة التحذير
+                    if st.session_state.get(f"confirm_del_{r['row_index_internal']}", False):
+                        st.error(f"⚠️ هل أنت متأكد من حذف العميل {r['name']}؟")
+                        c_del_1, c_del_2 = st.columns(2)
+                        if c_del_1.button("✅ نعم، احذف", key=f"yes_del_{r['row_index_internal']}"):
+                            if delete_item("Customers", r['row_index_internal']):
+                                st.success("تم الحذف!"); st.rerun()
+                        if c_del_2.button("❌ تراجع", key=f"no_del_{r['row_index_internal']}"):
+                            st.session_state[f"confirm_del_{r['row_index_internal']}"] = False
+                            st.rerun()
+
+                    # 2. منطق التعديل مع النموذج (Form)
+                    if st.session_state.get(f"edit_mode_{r['row_index_internal']}", False):
+                        with st.form(f"edit_form_{r['row_index_internal']}"):
+                            st.info(f"تعديل بيانات: {r['name']}")
+                            u_name = st.text_input("الاسم", value=r['name'])
+                            u_phone = st.text_input("الهاتف", value=r['phone'])
+                            u_address = st.text_area("العنوان", value=r.get('address', r.get('adress', '')))
+                            u_area = st.text_input("المنطقة", value=r['area'])
+                            u_loc = st.text_input("اللوكيشن", value=r.get('location_url', ''))
+                            u_cycle = st.number_input("الدورة", value=to_num(r['cycle']))
+                            
+                            if st.form_submit_button("حفظ التعديلات"):
+                                # تجميع الصف الجديد (يجب أن يطابق ترتيب أعمدة الشيت عندك بدقة)
+                                updated_data = [
+                                    u_name, u_phone, r.get('phone_1',''), r.get('phone_2',''), 
+                                    r.get('phone_3',''), r.get('phone_4',''), u_address, 
+                                    u_area, u_loc, r['install_date'], u_cycle, r['status']
+                                ]
+                                if update_item("Customers", r['row_index_internal'], updated_data):
+                                    st.success("تم التحديث بنجاح!"); st.rerun()
+                            
+                            if st.button("إغلاق"):
+                                st.session_state[f"edit_mode_{r['row_index_internal']}"] = False
+                                st.rerun()
 
     elif menu == "جدول المواعيد 📅":
         st.header("📅 جدول مواعيد الصيانة")
