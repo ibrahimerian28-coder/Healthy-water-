@@ -213,15 +213,16 @@ elif st.session_state.user_type == "admin":
             p2 = c2.text_input("هاتف 2")
             p3 = c1.text_input("هاتف 3")
             p4 = c2.text_input("هاتف 4")
-            address = st.text_area("العنوان بالتفصيل (adress)")
-            area = st.selectbox("المنطقة (area)", areas_list)
+            address = st.text_area("العنوان بالتفصيل")
+            area = st.selectbox("المنطقة", areas_list)
             new_area = st.text_input("أو أضف منطقة جديدة")
             final_area = new_area if new_area else area
-            loc = st.text_input("رابط اللوكيشن (location_url)")
-            inst_date = st.date_input("تاريخ التركيب (install_date)")
-            cycle = st.number_input("دورة الصيانة بالشهر (cycle)", value=3)
-            status = st.selectbox("الحالة (status)", ["نشط", "راكد"])
+            loc = st.text_input("رابط اللوكيشن (Location URL)")
+            inst_date = st.date_input("تاريخ التركيب")
+            cycle = st.number_input("دورة الصيانة بالشهر", value=3)
+            status = st.selectbox("الحالة", ["نشط", "راكد"])
             if st.form_submit_button("حفظ العميل الجديد"):
+                # تأكد من ترتيب البيانات ليتطابق مع ترتيب أعمدة الشيت (الاسم، الهاتف، هاتف1... العنوان، المنطقة، اللوكيشن...)
                 data = [name, phone, p1, p2, p3, p4, address, final_area, loc, str(inst_date), cycle, status]
                 if execute_gsheet_action("append", "Customers", data):
                     st.success("تم الحفظ بنجاح!"); st.rerun()
@@ -235,9 +236,18 @@ elif st.session_state.user_type == "admin":
             for _, r in group.iterrows():
                 with st.expander(f"👤 {r['name']} | 📞 {r['phone']}"):
                     c1, c2 = st.columns(2)
-                    c1.write(f"🏠 **العنوان:** {r.get('adress', 'غير مسجل')}")
+                    # محاولة جلب العنوان بأكثر من احتمالية للاسم لضمان الظهور
+                    addr = r.get('address') if r.get('address') else r.get('adress', 'غير مسجل')
+                    c1.write(f"🏠 **العنوان:** {addr}")
                     c1.write(f"📍 **المنطقة:** {r.get('area', 'غير مسجل')}")
                     c1.write(f"📅 **تاريخ التركيب:** {r.get('install_date', 'غير مسجل')}")
+                    
+                    # إضافة خانة اللوكيشن إذا كان الرابط موجوداً
+                    loc_url = r.get('location_url') if r.get('location_url') else r.get('location', '')
+                    if loc_url and str(loc_url).strip() != "":
+                        c1.markdown(f"📍 [**فتح الموقع على الخريطة**]({loc_url})")
+                    else:
+                        c1.write("📍 **اللوكيشن:** غير مسجل")
                     
                     cust_hist = df_m[df_m['name'] == r['name']].sort_values('v_date_dt', ascending=False)
                     
@@ -335,10 +345,25 @@ elif st.session_state.user_type == "admin":
             nts = st.text_area("ملاحظات")
             spec_d = st.date_input("موعد زيارة استثنائي (اختياري)", value=None)
             if st.form_submit_button("حفظ الزيارة"):
-                cid = df_c[df_c['name'] == selected_name]['phone'].values[0]
-                data = [selected_name, str(v_date), p1, p2, p3, mem, post, calc, infra, other_choice, amt, nts, str(spec_d) if spec_d else "", cid]
-                if execute_gsheet_action("append", "Maintenance", data):
-                    st.success("تم التسجيل بنجاح!"); st.rerun()
+                try:
+                    # جلب رقم الهاتف للعميل المختار ليكون مرجعاً (ID)
+                    customer_phone = str(df_c[df_c['name'] == selected_name]['phone'].values[0])
+                    # تجهيز البيانات بنفس ترتيب أعمدة شيت Maintenance
+                    # (الاسم، التاريخ، p1، p2، p3، ميمبرين، بوست، كالسايت، انفرا، أخرى، المبلغ، ملاحظات، تاريخ استثنائي، الهاتف)
+                    data = [
+                        selected_name, str(v_date), 
+                        "✅" if p1 else "❌", "✅" if p2 else "❌", "✅" if p3 else "❌", 
+                        "✅" if mem else "❌", "✅" if post else "❌", "✅" if calc else "❌", "✅" if infra else "❌", 
+                        other_choice, amt, nts, str(spec_d) if spec_d else "", customer_phone
+                    ]
+                    if execute_gsheet_action("append", "Maintenance", data):
+                        st.success(f"✅ تم تسجيل زيارة {selected_name} بنجاح!")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("❌ فشل الإرسال، تأكد من تحديث Apps Script أو استهلاك الكوتا.")
+                except Exception as e:
+                    st.error(f"خطأ في البيانات: {e}")
 
     elif menu == "المخزن 📦":
         st.header("📦 إدارة المخزن")
