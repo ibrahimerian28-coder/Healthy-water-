@@ -89,78 +89,136 @@ if not df_m.empty:
 if not df_exp.empty:
     df_exp['exp_date_dt'] = df_exp['date'].apply(parse_dt)
 
-# --- 4. وظيفة توليد الـ PDF ---
-class PDF_Report(FPDF):
-    def footer(self):
-        self.set_y(-15)
-        try:
-            self.add_font('ArabicFont', '', "Arial.ttf")
-            self.set_font('ArabicFont', '', 11)
-            footer_text = get_display(reshape(f"Healthy Water | للتواصل معنا: {COMPANY_PHONE} 📞 💬"))
-        except:
-            self.set_font('Arial', 'I', 10)
-            footer_text = f"Healthy Water | Contact: {COMPANY_PHONE}"
-        
-        self.set_text_color(128, 128, 128)
-        self.set_draw_color(200, 200, 200)
-        self.line(10, self.get_y(), 287, self.get_y())
-        self.cell(0, 10, footer_text, 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
+from fpdf import FPDF
+from arabic_reshaper import reshape
+from bidi.algorithm import get_display
+import datetime
+import os
 
-def generate_customer_pdf(cust_row, history_df):
-    pdf = PDF_Report(orientation='L', unit='mm', format='A4')
-    pdf.add_page()
-    
-    font_path = os.path.join(os.getcwd(), "Arial.ttf")
-    has_arabic = False
-    if os.path.exists(font_path):
+# --- الإعدادات الثابتة ---
+COMPANY_PHONE = "01286609535"
+COMPANY_NAME = "Healthy Water"
+SLOGAN = "الجودة التي تستحقها.. والنقاء الذي تثق به"
+
+class PDF_Report(FPDF):
+    def __init__(self, cust_name, install_date, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cust_name = cust_name
+        self.install_date = install_date
+
+    def header(self):
+        # 1. اللوجو: أعلى يسار الصفحة 
         try:
-            pdf.add_font('ArabicFont', '', font_path)
-            has_arabic = True
+            self.image(LOGO_PATH, x=10, y=10, w=35) 
         except: pass
 
+        # إعداد الخط العربي
+        font_path = "Arial.ttf"
+        if os.path.exists(font_path):
+            self.add_font('ArabicFont', '', font_path, uni=True)
+            self.set_font('ArabicFont', '', 22)
+        else:
+            self.set_font('Arial', 'B', 20)
+
+        # 2. اسم الشركة: منتصف الصفحة العلوي (Bold وكبير)
+        self.set_y(15)
+        self.set_text_color(0, 51, 102) 
+        name_display = get_display(reshape(COMPANY_NAME))
+        self.cell(0, 15, name_display, ln=True, align='C')
+        
+        # 3. عنوان الكارت: "كارت صيانة" 
+        self.set_font('ArabicFont', '', 18) if 'ArabicFont' in self.fonts else self.set_font('Arial', 'B', 16)
+        title_txt = get_display(reshape("كارت صيانة"))
+        self.cell(0, 10, title_txt, ln=True, align='C')
+
+        # 4. بيانات العميل: أقصى اليمين أسفل العنوان 
+        if self.page_no() == 1:
+            self.set_y(40) # النزول لمستوى البيانات بعيداً عن اللوجو
+            self.set_text_color(0, 0, 0)
+            self.set_font('ArabicFont', '', 14) if 'ArabicFont' in self.fonts else self.set_font('Arial', '', 12)
+            
+            # سطر الاسم
+            cust_txt = get_display(reshape(f"الاسم: {self.cust_name}"))
+            self.cell(0, 8, cust_txt, ln=True, align='R')
+            
+            # سطر تاريخ التركيب (شرطي) 
+            if self.install_date and str(self.install_date).strip() != "":
+                date_txt = get_display(reshape(f"تاريخ التركيب: {self.install_date}"))
+                self.cell(0, 8, date_txt, ln=True, align='R')
+            
+            self.ln(5) 
+
+    def footer(self):
+        self.set_y(-20)
+        if 'ArabicFont' in self.fonts: self.set_font('ArabicFont', '', 10)
+        else: self.set_font('Arial', '', 10)
+            
+        self.set_text_color(100, 100, 100)
+        self.set_draw_color(200, 200, 200)
+        self.line(10, self.get_y(), 287, self.get_y()) # خط الفوتر
+
+        # الـ Slogan المقترح في المنتصف
+        slogan_display = get_display(reshape(SLOGAN))
+        self.cell(0, 7, slogan_display, ln=True, align='C')
+
+        # اسم الشركة + الهاتف (تفاعلي) + رقم الصفحة 
+        contact_txt = get_display(reshape(f"{COMPANY_NAME} - {COMPANY_PHONE}"))
+        page_num = get_display(reshape(f"صفحة {self.page_no()}"))
+        self.cell(0, 7, f"{contact_txt}  |  {page_num}", 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
+
+def generate_customer_pdf(cust_row, history_df):
+    pdf = PDF_Report(
+        cust_name=cust_row['name'], 
+        install_date=cust_row.get('install_date', ''),
+        orientation='L', unit='mm', format='A4'
+    )
+    pdf.add_page()
+    
     def format_ar(text):
         if not text or str(text).strip() == "": return ""
-        if not has_arabic: return "".join([c for c in str(text) if ord(c) < 128])
         return get_display(reshape(str(text)))
 
-    try:
-        pdf.image(LOGO_PATH, x=197, y=10, w=90) 
-    except: pass
-
-    pdf.set_xy(10, 15) 
-    if has_arabic: pdf.set_font('ArabicFont', '', 24)
-    else: pdf.set_font('Arial', 'B', 22)
-    pdf.cell(150, 15, format_ar(f"تقرير صيانة: {cust_row['name']}"), ln=True, align='R')
-    
-    if has_arabic: pdf.set_font('ArabicFont', '', 14)
-    else: pdf.set_font('Arial', '', 12)
-    pdf.set_x(10)
-    pdf.cell(150, 8, f"Date: {datetime.now().strftime('%Y-%m-%d')}", ln=True, align='R')
-    
-    pdf.set_y(60) 
-
+    # --- إعدادات الجدول (طبق الأصل من المرفق)  ---
+    # ملاحظات | المبلغ | أخرى | Infra | Calc | Post | Mem | P3 | P2 | P1 | التاريخ
     cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
-    widths = [75, 17, 30, 15, 15, 15, 15, 15, 15, 15, 30]
+    widths = [75, 15, 25, 15, 15, 15, 15, 15, 15, 15, 30] 
+
+    # رأس الجدول (Header)
+    pdf.set_fill_color(220, 235, 250) # أزرق فاتح جداً هادئ
+    if 'ArabicFont' in pdf.fonts: pdf.set_font('ArabicFont', '', 11)
     
-    pdf.set_fill_color(173, 216, 230) 
-    if has_arabic: pdf.set_font('ArabicFont', '', 11)
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    if has_arabic: pdf.set_font('ArabicFont', '', 10)
+    # محتوى الجدول
+    if 'ArabicFont' in pdf.fonts: pdf.set_font('ArabicFont', '', 10)
+    
     fill = False
     for _, r in history_df.iterrows():
-        pdf.set_fill_color(245, 245, 245) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(widths[0], 8, format_ar(r['notes']), 1, 0, 'R', fill)
-        pdf.cell(widths[1], 8, str(r['amount']), 1, 0, 'C', fill)
-        other_val = str(r.get('other', ''))
-        pdf.cell(widths[2], 8, format_ar(other_val), 1, 0, 'C', fill)
-        for part in ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']:
+        # كسر الصفحة التلقائي
+        if pdf.get_y() > 175: 
+            pdf.add_page()
+            pdf.set_fill_color(220, 235, 250)
+            for i, col in enumerate(cols):
+                pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
+            pdf.ln()
+
+        pdf.set_fill_color(250, 250, 250) if fill else pdf.set_fill_color(255, 255, 255)
+        
+        # كتابة البيانات (بنفس ترتيب الجدول المرفق)
+        pdf.cell(widths[0], 8, format_ar(r.get('notes', '')), 1, 0, 'R', fill)
+        pdf.cell(widths[1], 8, str(r.get('amount', '0')), 1, 0, 'C', fill)
+        pdf.cell(widths[2], 8, format_ar(r.get('other', '')), 1, 0, 'C', fill)
+        
+        parts = ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']
+        for part in parts:
+            # استخدام "تم" كما في صورتك أو "X"
             val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C', fill)
-        pdf.cell(widths[10], 8, str(r['visit_date']), 1, 1, 'C', fill)
-        fill = not fill 
+            
+        pdf.cell(widths[10], 8, str(r.get('visit_date', '')), 1, 1, 'C', fill)
+        fill = not fill
 
     return bytes(pdf.output())
 
