@@ -105,63 +105,59 @@ class PDF_Report(FPDF):
         super().__init__(*args, **kwargs)
         self.cust_name = cust_name
         self.install_date = install_date
-
-    def header(self):
-        # 1. اللوجو: أعلى يسار الصفحة 
-        try:
-            self.image(LOGO_PATH, x=10, y=10, w=35) 
-        except: pass
-
-        # إعداد الخط العربي
+        # تحميل الخط هنا في البداية يضمن توفره لكل الدوال بما فيها header
         font_path = "Arial.ttf"
         if os.path.exists(font_path):
             self.add_font('ArabicFont', '', font_path, uni=True)
+
+    def header(self):
+        # تفعيل الخط العربي فوراً عند بدء الهيدر
+        if 'ArabicFont' in self.fonts:
             self.set_font('ArabicFont', '', 22)
         else:
             self.set_font('Arial', 'B', 20)
 
-        # 2. اسم الشركة: منتصف الصفحة العلوي (Bold وكبير)
+        # 1. اللوجو: أعلى يسار الصفحة [cite: 1]
+        try:
+            self.image(LOGO_PATH, x=10, y=10, w=35) 
+        except: pass
+
+        # 2. اسم الشركة: منتصف الصفحة العلوي 
         self.set_y(15)
         self.set_text_color(0, 51, 102) 
         name_display = get_display(reshape(COMPANY_NAME))
         self.cell(0, 15, name_display, ln=True, align='C')
         
-        # 3. عنوان الكارت: "كارت صيانة" 
-        self.set_font('ArabicFont', '', 18) if 'ArabicFont' in self.fonts else self.set_font('Arial', 'B', 16)
+        # 3. عنوان الكارت: "كارت صيانة" [cite: 3]
+        if 'ArabicFont' in self.fonts: self.set_font('ArabicFont', '', 18)
         title_txt = get_display(reshape("كارت صيانة"))
         self.cell(0, 10, title_txt, ln=True, align='C')
 
-        # 4. بيانات العميل: أقصى اليمين أسفل العنوان 
+        # 4. بيانات العميل: أقصى اليمين [cite: 5]
         if self.page_no() == 1:
-            self.set_y(40) # النزول لمستوى البيانات بعيداً عن اللوجو
+            self.set_y(40) 
             self.set_text_color(0, 0, 0)
-            self.set_font('ArabicFont', '', 14) if 'ArabicFont' in self.fonts else self.set_font('Arial', '', 12)
+            if 'ArabicFont' in self.fonts: self.set_font('ArabicFont', '', 14)
             
-            # سطر الاسم
             cust_txt = get_display(reshape(f"الاسم: {self.cust_name}"))
             self.cell(0, 8, cust_txt, ln=True, align='R')
             
-            # سطر تاريخ التركيب (شرطي) 
             if self.install_date and str(self.install_date).strip() != "":
                 date_txt = get_display(reshape(f"تاريخ التركيب: {self.install_date}"))
                 self.cell(0, 8, date_txt, ln=True, align='R')
-            
             self.ln(5) 
 
     def footer(self):
         self.set_y(-20)
         if 'ArabicFont' in self.fonts: self.set_font('ArabicFont', '', 10)
-        else: self.set_font('Arial', '', 10)
-            
         self.set_text_color(100, 100, 100)
         self.set_draw_color(200, 200, 200)
-        self.line(10, self.get_y(), 287, self.get_y()) # خط الفوتر
+        self.line(10, self.get_y(), 287, self.get_y())
 
-        # الـ Slogan المقترح في المنتصف
+        # الـ Slogan ورقم الهاتف التفاعلي 
         slogan_display = get_display(reshape(SLOGAN))
         self.cell(0, 7, slogan_display, ln=True, align='C')
 
-        # اسم الشركة + الهاتف (تفاعلي) + رقم الصفحة 
         contact_txt = get_display(reshape(f"{COMPANY_NAME} - {COMPANY_PHONE}"))
         page_num = get_display(reshape(f"صفحة {self.page_no()}"))
         self.cell(0, 7, f"{contact_txt}  |  {page_num}", 0, 0, 'C', False, f"tel:{COMPANY_PHONE}")
@@ -172,31 +168,26 @@ def generate_customer_pdf(cust_row, history_df):
         install_date=cust_row.get('install_date', ''),
         orientation='L', unit='mm', format='A4'
     )
+    # إضافة الصفحة الآن ستعمل لأن الخط تم تعريفه في __init__
     pdf.add_page()
     
     def format_ar(text):
         if not text or str(text).strip() == "": return ""
         return get_display(reshape(str(text)))
 
-    # --- إعدادات الجدول (طبق الأصل من المرفق)  ---
-    # ملاحظات | المبلغ | أخرى | Infra | Calc | Post | Mem | P3 | P2 | P1 | التاريخ
+    # إعدادات الجدول [cite: 2]
     cols = ['ملاحظات', 'المبلغ', 'أخرى', 'Infra', 'Calc', 'Post', 'Mem', 'P3', 'P2', 'P1', 'التاريخ']
     widths = [75, 15, 25, 15, 15, 15, 15, 15, 15, 15, 30] 
 
-    # رأس الجدول (Header)
-    pdf.set_fill_color(220, 235, 250) # أزرق فاتح جداً هادئ
+    pdf.set_fill_color(220, 235, 250)
     if 'ArabicFont' in pdf.fonts: pdf.set_font('ArabicFont', '', 11)
     
     for i, col in enumerate(cols):
         pdf.cell(widths[i], 10, format_ar(col), 1, 0, 'C', True)
     pdf.ln()
 
-    # محتوى الجدول
-    if 'ArabicFont' in pdf.fonts: pdf.set_font('ArabicFont', '', 10)
-    
     fill = False
     for _, r in history_df.iterrows():
-        # كسر الصفحة التلقائي
         if pdf.get_y() > 175: 
             pdf.add_page()
             pdf.set_fill_color(220, 235, 250)
@@ -205,15 +196,12 @@ def generate_customer_pdf(cust_row, history_df):
             pdf.ln()
 
         pdf.set_fill_color(250, 250, 250) if fill else pdf.set_fill_color(255, 255, 255)
-        
-        # كتابة البيانات (بنفس ترتيب الجدول المرفق)
         pdf.cell(widths[0], 8, format_ar(r.get('notes', '')), 1, 0, 'R', fill)
         pdf.cell(widths[1], 8, str(r.get('amount', '0')), 1, 0, 'C', fill)
         pdf.cell(widths[2], 8, format_ar(r.get('other', '')), 1, 0, 'C', fill)
         
         parts = ['infrared', 'Calcite', 'post_carbon', 'membrane', 'P3', 'P2', 'P1']
         for part in parts:
-            # استخدام "تم" كما في صورتك أو "X"
             val = format_ar("تم") if str(r.get(part, '')).lower() in ['true', '1', '✅'] else ""
             pdf.cell(15, 8, val, 1, 0, 'C', fill)
             
